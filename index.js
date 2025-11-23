@@ -227,6 +227,35 @@ app.get("/scan", async (req, res) => {
   }
 });
 
+/* Endpoint para revisar los registros creados */
+app.get("/registros", async (req, res) => {
+  try {
+    const registros = await getUserRecords();
+
+    // Filtramos los campos '_id' y 'qr' del resultado
+    const registrosFiltrados = registros.map((registro) => {
+      const { _id, qr, ...registroSinIdYQR } = registro;
+      return registroSinIdYQR;
+    });
+
+    console.log(
+      `---------------------------------- Registros Encontrados ----------------------------------`
+    );
+    res.json({
+      result: true,
+      success: "datos obtenidos",
+      data: registrosFiltrados,
+    });
+  } catch (err) {
+    console.error("********************* Error al obtener registros:", err);
+    res.status(500).json({
+      result: false,
+      success: "",
+      error: "Error al obtener registros",
+    });
+  }
+});
+
 /* Endpoint para cerrar sesión de forma segura */
 app.post("/logout/:id_externo", async (req, res) => {
   try {
