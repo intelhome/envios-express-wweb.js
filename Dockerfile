@@ -1,20 +1,45 @@
-# Usa la imagen oficial de Node.js con la versión 16.16.0
-FROM node:16.16.0
+FROM node:18-slim
 
-# Establece el directorio de trabajo en el contenedor
+# Instalar dependencias de Chromium/Puppeteer
+RUN apt-get update && apt-get install -y \
+    chromium \
+    chromium-sandbox \
+    fonts-ipafont-gothic \
+    fonts-wqy-zenhei \
+    fonts-thai-tlwg \
+    fonts-kacst \
+    fonts-freefont-ttf \
+    libxss1 \
+    libnss3 \
+    libnss3-dev \
+    libatk-bridge2.0-0 \
+    libdrm-dev \
+    libxkbcommon-dev \
+    libgbm-dev \
+    libasound2 \
+    libgtk-3-0 \
+    ca-certificates \
+    --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
+# Establecer directorio de trabajo
 WORKDIR /usr/src/app
 
-# Copia el archivo package.json y package-lock.json
+# Copiar package files
 COPY package*.json ./
 
-# Instala las dependencias (usa --force si es necesario)
-RUN npm install --force
+# Instalar dependencias de Node
+RUN npm install
 
-# Copia el resto del código de tu aplicación
+# Copiar código fuente
 COPY . .
 
-# Expone el puerto en el que corre la aplicación
+# Variables de entorno para Puppeteer
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
+# Exponer puerto
 EXPOSE 4010
 
-# Comando para iniciar la aplicación
+# Comando de inicio
 CMD ["npm", "start"]
