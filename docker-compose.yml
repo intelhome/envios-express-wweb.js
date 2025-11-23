@@ -1,0 +1,22 @@
+services:
+  app:
+    container_name: envios-express-container
+    build:
+      context: .
+    image: envios-express-2024:latest
+    ports:
+      - "4010:4010"
+    volumes:
+      - .:/usr/src/app
+    environment:
+      NODE_ENV: production
+    restart: always
+
+  # nginx:
+  #   image: nginx:latest
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/conf.d/default.conf
+  #   depends_on:
+  #     - app
