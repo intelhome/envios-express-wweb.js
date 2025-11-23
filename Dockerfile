@@ -29,7 +29,7 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 
 # Instalar dependencias de Node
-RUN npm install
+RUN npm install --force
 
 # Copiar código fuente
 COPY . .
