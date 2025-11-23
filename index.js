@@ -338,8 +338,8 @@ app.delete("/eliminar-usuario/:id_externo", async (req, res) => {
     }
 
     if (id_externo) {
-      await removeRegistro(id_externo);
       await logoutWhatsApp(id_externo);
+      await removeRegistro(id_externo);
 
       console.log(
         `---------------------------------- SE ELIMINARON LAS FUNCIONES PARA ${id_externo} ----------------------------------`
