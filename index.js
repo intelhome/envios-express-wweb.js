@@ -298,7 +298,7 @@ app.get("/view-user/:id_externo", async (req, res) => {
     const userName = info.pushname || info.wid.user; // Nombre o número
     const phoneNumber = info.wid.user; // Solo el número sin @c.us
 
-    console.log(`✅ Información del usuario ${id_externo} entregada`);
+    console.log(`✅ \nInformación del usuario ${id_externo} entregada`);
     console.log(`   - ID: ${userId}`);
     console.log(`   - Nombre: ${userName}`);
     console.log(`   - Teléfono: ${phoneNumber}`);
@@ -319,6 +319,49 @@ app.get("/view-user/:id_externo", async (req, res) => {
       status: false,
       response: "Error al obtener información del usuario",
       error: err.message,
+    });
+  }
+});
+
+/* Endpoint para eliminar un usuario */
+app.delete("/eliminar-usuario/:id_externo", async (req, res) => {
+  const { id_externo } = req.params;
+
+  try {
+    const registros = await getUserRecords();
+
+    if (!registros) {
+      res.status(400).json({
+        result: false,
+        error: "No existen aun registros",
+      });
+    }
+
+    if (id_externo) {
+      await removeRegistro(id_externo);
+      await logoutWhatsApp(id_externo);
+
+      console.log(
+        `---------------------------------- SE ELIMINARON LAS FUNCIONES PARA ${id_externo} ----------------------------------`
+      );
+      res.json({
+        result: true,
+        id: id_externo,
+        success: "Registro eliminado correctamente",
+        error: "",
+      });
+    } else {
+      res.status(400).json({
+        result: false,
+        success: "",
+        error: "Debe especificar el id_externo del usuario.",
+      });
+    }
+  } catch (err) {
+    console.error("Error detallado:", err);
+    res.status(500).json({
+      result: false,
+      error: `Error al eliminar el registro: ${err.message}`,
     });
   }
 });
