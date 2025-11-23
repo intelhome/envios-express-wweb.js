@@ -256,6 +256,73 @@ app.get("/registros", async (req, res) => {
   }
 });
 
+/* Endpoint para mostrar la información del usuario */
+app.get("/view-user/:id_externo", async (req, res) => {
+  const { id_externo } = req.params;
+
+  try {
+    console.log(`📋 Solicitando información del usuario: ${id_externo}`);
+
+    // Verificar si existe la sesión
+    const session = WhatsAppSessions[id_externo];
+
+    if (!session) {
+      console.log(`⚠️ No existe sesión para: ${id_externo}`);
+      return res.status(404).json({
+        result: false,
+        status: false,
+        response: "No existe una sesión para este usuario",
+      });
+    }
+
+    const client = session.client;
+
+    // Verificar si está conectado
+    const state = await client.getState().catch(() => null);
+
+    if (state !== "CONNECTED") {
+      console.log(`⚠️ Cliente no conectado: ${id_externo} - Estado: ${state}`);
+      return res.status(500).json({
+        result: false,
+        status: false,
+        response: "Aún no estás conectado",
+        state: state || "DISCONNECTED",
+      });
+    }
+
+    // Obtener información del usuario
+    const info = await client.info;
+
+    // Extraer datos
+    const userId = info.wid._serialized; // Número completo con @c.us
+    const userName = info.pushname || info.wid.user; // Nombre o número
+    const phoneNumber = info.wid.user; // Solo el número sin @c.us
+
+    console.log(`✅ Información del usuario ${id_externo} entregada`);
+    console.log(`   - ID: ${userId}`);
+    console.log(`   - Nombre: ${userName}`);
+    console.log(`   - Teléfono: ${phoneNumber}`);
+
+    res.json({
+      result: true,
+      status: true,
+      userId: userId,
+      userName: userName,
+      phoneNumber: phoneNumber,
+      connectedAt: session.connectedAt,
+      state: state,
+    });
+  } catch (err) {
+    console.error(`❌ Error obteniendo info del usuario ${id_externo}:`, err);
+    res.status(500).json({
+      result: false,
+      status: false,
+      response: "Error al obtener información del usuario",
+      error: err.message,
+    });
+  }
+});
+
 /* Endpoint para cerrar sesión de forma segura */
 app.post("/logout/:id_externo", async (req, res) => {
   try {
