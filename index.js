@@ -439,7 +439,15 @@ app.post("/send-message/:id_externo", async (req, res) => {
     }
 
     // Formatear número
-    let formattedNumber = number.replace(/[^\d]/g, "");
+    let formattedNumber = String(number || "").replace(/[^\d]/g, "");
+
+    // Validar que no esté vacío después de formatear
+    if (!formattedNumber) {
+      return res.status(400).json({
+        status: false,
+        response: "Número de teléfono inválido o no proporcionado",
+      });
+    }
 
     // Agregar código de país si es necesario (Ecuador = 593)
     if (formattedNumber.length === 10 && !formattedNumber.startsWith("593")) {
@@ -1187,11 +1195,24 @@ async function handleIncomingMessage(message, id_externo, client) {
 
     // Extraer número del remitente
     let senderNumber;
+
     if (isGroup) {
       // En grupos, el author es quien envió el mensaje
-      senderNumber = message.author.replace("@c.us", "");
+      senderNumber =
+        message.author?.replace("@c.us", "") ||
+        message.from?.replace("@c.us", "") ||
+        "";
     } else {
-      senderNumber = message.from.replace("@c.us", "");
+      senderNumber =
+        message.from?.replace("@c.us", "") ||
+        message.author?.replace("@c.us", "") ||
+        "";
+    }
+
+    // Validar que tengamos un número válido
+    if (!senderNumber) {
+      console.error("⚠️ No se pudo obtener el número del remitente");
+      return;
     }
 
     // Número del receptor (tu número)
