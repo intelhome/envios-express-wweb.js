@@ -1,5 +1,4 @@
-const { Client, LocalAuth, RemoteAuth } = require("whatsapp-web.js");
-const qrcode = require("qrcode-terminal");
+const { Client, LocalAuth } = require("whatsapp-web.js");
 const express = require("express");
 const fileUpload = require("express-fileupload");
 const cors = require("cors");
@@ -11,6 +10,8 @@ const fs = require("fs");
 const app = require("express")();
 const path = require("path");
 const { MessageMedia } = require("whatsapp-web.js");
+const https = require("https");
+
 require("dotenv").config();
 
 const connectToMongoDB = require("./functions/connect-mongodb");
@@ -28,9 +29,16 @@ app.use(
 app.use(cors());
 app.use(bodyParser.json({ limit: "50mb" }));
 app.use(bodyParser.urlencoded({ limit: "50mb", extended: true }));
+app.use(express.static(path.join(__dirname, "client")));
+
 const server = require("http").createServer(app);
 const io = require("socket.io")(server);
 const port = process.env.PORT || 4010;
+
+// Variables para el sock
+let db;
+let whatsapp_registros;
+let WhatsAppSessions = {};
 
 // Trackear sockets de usuarios
 global.io = io;
@@ -148,13 +156,6 @@ io.on("connection", (socket) => {
     }
   });
 });
-
-// Variables para el sock
-let db;
-let whatsapp_registros;
-let WhatsAppSessions = {};
-
-app.use(express.static(path.join(__dirname, "client")));
 
 /* Endpoint para crear un nuevo usuario */
 app.post("/crear-usuario", async (req, res) => {
@@ -558,6 +559,249 @@ app.post("/send-message/:id_externo", async (req, res) => {
   }
 });
 
+/* Enviar mensajes Multimedia (image, video, audio, location, document) */
+app.post("/send-message-media/:id_externo", async (req, res) => {
+  const { number, tempMessage, link, type, latitud, longitud, file } = req.body;
+  const { id_externo } = req.params;
+
+  try {
+    // Validación del número
+    if (!number) {
+      return res.status(400).json({
+        status: false,
+        response: "El número es requerido",
+      });
+    }
+
+    // Obtener sesión del cliente
+    const session = WhatsAppSessions[id_externo];
+
+    if (!session?.client) {
+      return res.status(404).json({
+        status: false,
+        response: "No existe una sesión activa para este usuario",
+        hint: "Inicia sesión primero escaneando el QR",
+      });
+    }
+
+    const client = session.client;
+
+    // Verificar estado de conexión
+    const state = await client.getState();
+
+    if (state !== "CONNECTED") {
+      return res.status(503).json({
+        status: false,
+        response: `Cliente no conectado. Estado: ${state}`,
+        state: state,
+      });
+    }
+
+    // Formatear número
+    let formattedNumber = number.replace(/[^\d]/g, "");
+
+    // Agregar código de país Ecuador (593) si es necesario
+    if (formattedNumber.length === 10 && !formattedNumber.startsWith("593")) {
+      formattedNumber = "593" + formattedNumber;
+    } else if (
+      formattedNumber.length === 9 &&
+      !formattedNumber.startsWith("593")
+    ) {
+      formattedNumber = "593" + formattedNumber;
+    }
+
+    const chatId = formattedNumber + "@c.us";
+
+    // Verificar si el número está registrado en WhatsApp
+    const isRegistered = await client.isRegisteredUser(chatId);
+
+    if (!isRegistered) {
+      return res.status(404).json({
+        status: false,
+        response: "El número no está registrado en WhatsApp",
+        number: formattedNumber,
+      });
+    }
+
+    let result;
+    const fechaServidor = moment()
+      .tz("America/Guayaquil")
+      .format("YYYY-MM-DD HH:mm:ss");
+
+    // Procesar según el tipo de mensaje
+    switch (type) {
+      case "image":
+        try {
+          const imageMedia = await MessageMedia.fromUrl(link);
+          result = await client.sendMessage(chatId, imageMedia, {
+            caption: tempMessage || "",
+          });
+
+          console.log(`🖼️ Imagen enviada a ${formattedNumber}`);
+        } catch (err) {
+          return res.status(500).json({
+            status: false,
+            response: "Error al enviar imagen",
+            error: err.message,
+          });
+        }
+        break;
+
+      case "video":
+        try {
+          const videoMedia = await MessageMedia.fromUrl(link);
+          result = await client.sendMessage(chatId, videoMedia, {
+            caption: tempMessage || "",
+            sendMediaAsDocument: false,
+          });
+
+          console.log(`🎥 Video enviado a ${formattedNumber}`);
+        } catch (err) {
+          return res.status(500).json({
+            status: false,
+            response: "Error al enviar video",
+            error: err.message,
+          });
+        }
+        break;
+
+      case "audio":
+        try {
+          const audioMedia = await MessageMedia.fromUrl(link);
+          // Para enviar como nota de voz, usar sendMediaAsDocument: false
+          result = await client.sendMessage(chatId, audioMedia, {
+            sendAudioAsVoice: true, // Enviar como nota de voz
+          });
+
+          console.log(`🎵 Audio enviado a ${formattedNumber}`);
+        } catch (err) {
+          return res.status(500).json({
+            status: false,
+            response: "Error al enviar audio",
+            error: err.message,
+          });
+        }
+        break;
+
+      case "location":
+        try {
+          const location = new Location(latitud, longitud, tempMessage || "");
+          result = await client.sendMessage(chatId, location);
+
+          console.log(`📍 Ubicación enviada a ${formattedNumber}`);
+        } catch (err) {
+          return res.status(500).json({
+            status: false,
+            response: "Error al enviar ubicación",
+            error: err.message,
+          });
+        }
+        break;
+
+      case "document":
+        try {
+          const pathname = new URL(link).pathname;
+          const nombreArchivo = decodeURIComponent(
+            pathname.substring(pathname.lastIndexOf("/") + 1)
+          );
+
+          const documentMedia = await MessageMedia.fromUrl(link);
+          documentMedia.filename = nombreArchivo;
+
+          result = await client.sendMessage(chatId, documentMedia, {
+            caption: tempMessage || "",
+            sendMediaAsDocument: true,
+          });
+
+          console.log(`📄 Documento enviado a ${formattedNumber}`);
+        } catch (err) {
+          return res.status(500).json({
+            status: false,
+            response: "Error al enviar documento",
+            error: err.message,
+          });
+        }
+        break;
+
+      case "documentBase64":
+        try {
+          const pdfMedia = new MessageMedia(
+            "application/pdf",
+            link, // Base64 string
+            `${file || "documento"}.pdf`
+          );
+
+          result = await client.sendMessage(chatId, pdfMedia, {
+            caption: tempMessage || "",
+            sendMediaAsDocument: true,
+          });
+
+          console.log(`📎 PDF Base64 enviado a ${formattedNumber}`);
+        } catch (err) {
+          return res.status(500).json({
+            status: false,
+            response: "Error al enviar PDF Base64",
+            error: err.message,
+          });
+        }
+        break;
+
+      default:
+        // Enviar mensaje de texto
+        try {
+          result = await client.sendMessage(chatId, tempMessage);
+          console.log(`💬 Mensaje de texto enviado a ${formattedNumber}`);
+        } catch (err) {
+          return res.status(500).json({
+            status: false,
+            response: "Error al enviar mensaje de texto",
+            error: err.message,
+          });
+        }
+        break;
+    }
+
+    // Obtener información del cliente
+    const info = client.info;
+
+    // Log del mensaje enviado
+    console.log({
+      De: `cliente-${id_externo}`,
+      Para: formattedNumber,
+      EnviadoPor: info.wid.user,
+      Message: tempMessage,
+      Tipo: type,
+      Fecha: fechaServidor,
+      MessageId: result.id._serialized,
+    });
+
+    // Esperar un momento para que se procese el envío
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // Respuesta exitosa
+    return res.status(200).json({
+      status: true,
+      response: {
+        messageId: result.id._serialized,
+        timestamp: result.timestamp,
+        senderNumber: info.wid.user,
+        recipientNumber: formattedNumber,
+        type: type,
+        ack: result.ack,
+        ackName: getAckStatus(result.ack),
+        fecha: fechaServidor,
+      },
+    });
+  } catch (error) {
+    console.error("Error general en send-message-media:", error);
+    return res.status(500).json({
+      status: false,
+      response: error.message || "Error interno del servidor",
+      error: process.env.NODE_ENV === "development" ? error.stack : undefined,
+    });
+  }
+});
+
 /**
  * Obtener el nombre del estado de ACK
  */
@@ -747,6 +991,12 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
           "--disable-gpu",
         ],
       },
+      qrMaxRetries: 5, // Número de veces que se regenerará el QR (5 QRs = ~5 minutos)
+      authTimeoutMs: 0, // Desactiva timeout de autenticación (0 = sin límite)
+      qrTimeoutMs: 0, // CRÍTICO: Desactiva el timeout del QR (0 = sin límite)
+      restartOnAuthFail: true, // Reiniciar si falla la autenticación
+      takeoverOnConflict: false, // No tomar control si hay otra sesión activa
+      takeoverTimeoutMs: 0,
       webVersionCache: {
         type: "remote",
         remotePath:
@@ -878,11 +1128,31 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
       await deleteRemoteSession(id_externo, store);
     });
 
-    // Mensajes entrantes
+    // ============================================
+    // RECEPCIÓN DE MENSAJES (NUEVA FUNCIONALIDAD)
+    // ============================================
     if (receiveMessages) {
       client.on("message", async (message) => {
-        await receiveMessages(message, id_externo);
+        await handleIncomingMessage(message, id_externo, client);
       });
+
+      // Escuchar cambios en mensajes (ediciones, eliminaciones)
+      client.on("message_revoke_everyone", async (revokedMsg) => {
+        console.log(
+          `🗑️ Mensaje eliminado por el remitente: ${revokedMsg.id._serialized}`
+        );
+      });
+
+      // Escuchar cuando alguien está escribiendo
+      client.on("message_create", async (message) => {
+        // Este evento se dispara para TODOS los mensajes, incluso los que envías tú
+        // Útil si necesitas procesar también tus mensajes enviados
+        if (message.fromMe) {
+          console.log(`📤 Mensaje enviado por ti: ${message.body}`);
+        }
+      });
+
+      console.log(`📩 Recepción de mensajes activada para: ${id_externo}`);
     }
 
     // Inicializar cliente
@@ -892,6 +1162,126 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
   } catch (error) {
     console.error(`Error conectando WhatsApp para ${id_externo}:`, error);
     throw error;
+  }
+}
+
+// Función para manejar mensajes entrantes (equivalente a receiveMessages)
+async function handleIncomingMessage(message, id_externo, client) {
+  try {
+    // Ignorar mensajes propios
+    if (message.fromMe) {
+      return;
+    }
+
+    // Ignorar mensajes de protocolo (ephemeral, disappearing mode, etc)
+    if (message.type === "protocol" || message.type === "ephemeral") {
+      return;
+    }
+
+    const chat = await message.getChat();
+    const contact = await message.getContact();
+
+    // Obtener información del remitente
+    const isGroup = chat.isGroup;
+    const senderJid = message.from; // Ej: "593981773526@c.us" o "123456789@g.us"
+
+    // Extraer número del remitente
+    let senderNumber;
+    if (isGroup) {
+      // En grupos, el author es quien envió el mensaje
+      senderNumber = message.author.replace("@c.us", "");
+    } else {
+      senderNumber = message.from.replace("@c.us", "");
+    }
+
+    // Número del receptor (tu número)
+    const reciberNumber = client.info.wid.user;
+
+    // Capturar el contenido del mensaje
+    let captureMessage = "vacio";
+
+    // Obtener el texto del mensaje según el tipo
+    if (message.body && message.body.trim() !== "") {
+      captureMessage = message.body;
+    } else if (message.type === "image" || message.type === "video") {
+      captureMessage = message.caption || `[${message.type}]`;
+    } else if (message.type === "audio" || message.type === "ptt") {
+      captureMessage = "[audio]";
+    } else if (message.type === "document") {
+      captureMessage = "[documento]";
+    } else if (message.type === "location") {
+      captureMessage = "[ubicación]";
+    } else if (message.type === "sticker") {
+      captureMessage = "[sticker]";
+    }
+
+    // Extraer solo el número (sin formato)
+    const phoneNumber = senderNumber.replace(/\D/g, "");
+
+    // Verificar si es un mensaje directo (usuario) y no grupo
+    const isDirectMessage = !isGroup;
+
+    console.log({
+      tipo: isGroup ? "Grupo" : "Usuario",
+      de: senderNumber,
+      para: reciberNumber,
+      mensaje: captureMessage,
+      chat: senderJid,
+    });
+
+    // Solo procesar mensajes directos de usuarios (no grupos)
+    if (isDirectMessage && phoneNumber !== "") {
+      // Preparar datos para enviar al webhook
+      const data = JSON.stringify({
+        empresa: "sigcrm_clinicasancho",
+        name: phoneNumber,
+        senderNumber: senderNumber,
+        reciberNumber: reciberNumber,
+        description: captureMessage,
+      });
+
+      const options = {
+        hostname: "sigcrm.pro",
+        path: "/response-baileys",
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(data),
+        },
+      };
+
+      // Realizar petición HTTP
+      const req = https.request(options, (res) => {
+        let responseData = "";
+
+        res.on("data", (chunk) => {
+          responseData += chunk;
+        });
+
+        res.on("end", () => {
+          console.log(
+            `✅ Webhook enviado para ${phoneNumber}: ${res.statusCode}`
+          );
+          // console.log("Response:", responseData);
+        });
+      });
+
+      req.on("error", (error) => {
+        console.error("❌ Error enviando webhook:", error.message);
+      });
+
+      req.write(data);
+      req.end();
+
+      console.log(
+        `📤 Mensaje enviado al webhook para: ${phoneNumber} - "${captureMessage}"`
+      );
+
+      // Opcional: Responder automáticamente (descomentado si lo necesitas)
+      // await message.reply("whatsapp on");
+    }
+  } catch (error) {
+    console.error("❌ Error procesando mensaje entrante:", error);
   }
 }
 
