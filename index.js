@@ -1,4 +1,4 @@
-const { Client, LocalAuth } = require("whatsapp-web.js");
+const { Client, LocalAuth, RemoteAuth } = require("whatsapp-web.js");
 const express = require("express");
 const fileUpload = require("express-fileupload");
 const cors = require("cors");
@@ -16,7 +16,6 @@ require("dotenv").config();
 
 const connectToMongoDB = require("./functions/connect-mongodb");
 const connectMongoose = require("./functions/connect-mongoose");
-const MongoSessionSync = require("./functions/MongoSessionSync");
 
 const { MongoStore } = require("wwebjs-mongo");
 
@@ -980,13 +979,18 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
     }
 
     // Crear sincronizador de MongoDB
-    const mongoSync = new MongoSessionSync(mongoose, id_externo);
+    // const mongoSync = new MongoSessionSync(mongoose, id_externo);
 
     // Restaurar sesión desde MongoDB ANTES de crear el cliente
-    await mongoSync.restoreSession();
+    // await mongoSync.restoreSession();
+    const store = new MongoStore({ mongoose: mongoose });
 
     const client = new Client({
-      authStrategy: new LocalAuth({ clientId: id_externo }),
+      authStrategy: new RemoteAuth({
+        clientId: id_externo,
+        store: store,
+        backupSyncIntervalMs: 300000, // Sincronizar cada 5 minutos
+      }),
       puppeteer: {
         headless: true,
         args: [
