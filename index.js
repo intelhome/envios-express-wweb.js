@@ -963,14 +963,27 @@ async function removeRegistro(id_externo) {
 
 async function connectToWhatsApp(id_externo, receiveMessages) {
   try {
-    const sessionCollection = `session_auth_info_${id_externo}`;
+    const correctCollectionName = `whatsapp-RemoteAuth-${id_externo}`;
 
-    // Verificar si existe sesión en MongoDB
-    const savedSession = await mongoose.connection.db
-      .collection(sessionCollection)
-      .findOne({ key: "session_data" });
+    let sessionExists = false;
+    try {
+      const collections = await mongoose.connection.db
+        .listCollections({ name: correctCollectionName })
+        .toArray();
+      sessionExists = collections.length > 0;
 
-    if (savedSession) {
+      if (sessionExists) {
+        // Verificar que tenga datos
+        const count = await mongoose.connection.db
+          .collection(correctCollectionName)
+          .countDocuments();
+        sessionExists = count > 0;
+      }
+    } catch (error) {
+      console.log(`⚠️ Error verificando colección: ${error.message}`);
+    }
+
+    if (sessionExists) {
       console.log(`✅ Sesión existente encontrada para: ${id_externo}`);
     } else {
       console.log(
