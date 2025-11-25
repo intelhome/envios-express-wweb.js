@@ -34,10 +34,6 @@ RUN npm install --force
 # Copiar código fuente
 COPY . .
 
-# Crear directorio para sesiones y darle permisos
-RUN mkdir -p .wwebjs_auth && \
-    chown -R node:node /usr/src/app
-
 # Variables de entorno para Puppeteer
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
