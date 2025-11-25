@@ -1,4 +1,4 @@
-const { Client, LocalAuth, RemoteAuth } = require("whatsapp-web.js");
+const { Client, LocalAuth } = require("whatsapp-web.js");
 const express = require("express");
 const fileUpload = require("express-fileupload");
 const cors = require("cors");
@@ -16,6 +16,7 @@ require("dotenv").config();
 
 const connectToMongoDB = require("./functions/connect-mongodb");
 const connectMongoose = require("./functions/connect-mongoose");
+const MongoSessionSync = require("./functions/MongoSessionSync");
 
 const { MongoStore } = require("wwebjs-mongo");
 
@@ -963,86 +964,29 @@ async function removeRegistro(id_externo) {
 
 async function connectToWhatsApp(id_externo, receiveMessages) {
   try {
-    const correctCollectionName = `whatsapp-RemoteAuth-${id_externo}`;
+    const sessionCollection = `session_auth_info_${id_externo}`;
 
-    console.log(`📂 Verificando colección: ${correctCollectionName}`);
+    // Verificar si existe sesión en MongoDB
+    const savedSession = await mongoose.connection.db
+      .collection(sessionCollection)
+      .findOne({ key: "session_data" });
 
-    let sessionExists = false;
-    let documentCount = 0;
-
-    try {
-      // Listar todas las colecciones para debug
-      const allCollections = await mongoose.connection.db
-        .listCollections()
-        .toArray();
-      console.log(`📋 Total de colecciones en DB: ${allCollections.length}`);
-
-      const whatsappCollections = allCollections.filter((c) =>
-        c.name.includes("whatsapp")
-      );
-      if (whatsappCollections.length > 0) {
-        console.log(`📱 Colecciones de WhatsApp encontradas:`);
-        whatsappCollections.forEach((c) => console.log(`   - ${c.name}`));
-      } else {
-        console.log(`ℹ️ No hay colecciones de WhatsApp en la base de datos`);
-      }
-
-      // Verificar la colección específica
-      const targetCollection = await mongoose.connection.db
-        .listCollections({ name: correctCollectionName })
-        .toArray();
-      sessionExists = targetCollection.length > 0;
-
-      console.log(
-        `🔍 Colección "${correctCollectionName}" existe: ${sessionExists}`
-      );
-
-      if (sessionExists) {
-        documentCount = await mongoose.connection.db
-          .collection(correctCollectionName)
-          .countDocuments();
-        console.log(`📊 Documentos en la colección: ${documentCount}`);
-        sessionExists = documentCount > 0;
-
-        if (documentCount > 0) {
-          // Mostrar los primeros documentos (sin datos sensibles)
-          const docs = await mongoose.connection.db
-            .collection(correctCollectionName)
-            .find({})
-            .limit(3)
-            .toArray();
-          console.log(
-            `📄 Primeros documentos (IDs):`,
-            docs.map((d) => d._id)
-          );
-        }
-      }
-    } catch (error) {
-      console.error(`❌ Error verificando colección:`, error);
-      console.error(`   Stack:`, error.stack);
-    }
-
-    if (sessionExists) {
-      console.log(
-        `✅ Sesión existente encontrada para: ${id_externo} (${documentCount} documentos)`
-      );
+    if (savedSession) {
+      console.log(`✅ Sesión existente encontrada para: ${id_externo}`);
     } else {
       console.log(
         `⚠️ No hay sesión guardada para: ${id_externo}, se generará QR`
       );
     }
 
-    console.log(`\n🏗️ Creando MongoStore...`);
-    const store = new MongoStore({ mongoose: mongoose });
-    console.log(`✅ MongoStore creado`);
+    // Crear sincronizador de MongoDB
+    const mongoSync = new MongoSessionSync(mongoose, id_externo);
 
-    console.log(`\n🤖 Configurando cliente de WhatsApp...`);
+    // Restaurar sesión desde MongoDB ANTES de crear el cliente
+    await mongoSync.restoreSession();
+
     const client = new Client({
-      authStrategy: new RemoteAuth({
-        clientId: id_externo,
-        store: store,
-        backupSyncIntervalMs: 300000,
-      }),
+      authStrategy: new LocalAuth({ clientId: id_externo }),
       puppeteer: {
         headless: true,
         args: [
@@ -1055,50 +999,17 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
           "--disable-gpu",
         ],
       },
-      qrMaxRetries: 5,
-      authTimeoutMs: 0,
-      qrTimeoutMs: 0,
-      restartOnAuthFail: true,
-      takeoverOnConflict: false,
+      qrMaxRetries: 5, // Número de veces que se regenerará el QR (5 QRs = ~5 minutos)
+      authTimeoutMs: 0, // Desactiva timeout de autenticación (0 = sin límite)
+      qrTimeoutMs: 0, // CRÍTICO: Desactiva el timeout del QR (0 = sin límite)
+      restartOnAuthFail: true, // Reiniciar si falla la autenticación
+      takeoverOnConflict: false, // No tomar control si hay otra sesión activa
       takeoverTimeoutMs: 0,
       webVersionCache: {
         type: "remote",
         remotePath:
           "https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html",
       },
-    });
-    console.log(`✅ Cliente configurado`);
-
-    // ============================================
-    // EVENTOS DE RemoteAuth
-    // ============================================
-    console.log(`\n📡 Registrando eventos de RemoteAuth...`);
-
-    client.on("remote_session_saved", async () => {
-      console.log(`\n💾 ✅ EVENTO: remote_session_saved para ${id_externo}`);
-
-      try {
-        const count = await mongoose.connection.db
-          .collection(correctCollectionName)
-          .countDocuments();
-        console.log(`   📊 Documentos guardados: ${count}`);
-
-        const docs = await mongoose.connection.db
-          .collection(correctCollectionName)
-          .find({})
-          .limit(1)
-          .toArray();
-        if (docs.length > 0) {
-          console.log(`   📄 Primer documento ID: ${docs[0]._id}`);
-          console.log(`   🔑 Keys en documento:`, Object.keys(docs[0]));
-        }
-      } catch (error) {
-        console.error(`   ❌ Error verificando guardado:`, error.message);
-      }
-    });
-
-    client.on("loading_screen", (percent, message) => {
-      console.log(`⏳ CARGANDO SESIÓN ${id_externo}: ${percent}% - ${message}`);
     });
 
     // ============================================
