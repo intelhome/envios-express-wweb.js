@@ -1181,78 +1181,82 @@ async function handleIncomingMessage(message, id_externo, client) {
       return;
     }
 
-    // Ignorar mensajes de protocolo (ephemeral, disappearing mode, etc)
+    // Ignorar mensajes de protocolo
     if (message.type === "protocol" || message.type === "ephemeral") {
       return;
     }
 
+    // Obtener chat (esto sí funciona)
     const chat = await message.getChat();
-    const contact = await message.getContact();
-
-    // Obtener información del remitente
     const isGroup = chat.isGroup;
-    const senderJid = message.from; // Ej: "593981773526@c.us" o "123456789@g.us"
+    const senderJid = message.from;
 
-    // Extraer número del remitente
+    // Extraer número del remitente directamente del mensaje (más confiable)
     let senderNumber;
 
     if (isGroup) {
-      // En grupos, el author es quien envió el mensaje
-      senderNumber =
-        message.author?.replace("@c.us", "") ||
-        message.from?.replace("@c.us", "") ||
-        "";
+      // En grupos usar author
+      senderNumber = (message.author || message.from)
+        .replace("@c.us", "")
+        .replace("@g.us", "");
     } else {
-      senderNumber =
-        message.from?.replace("@c.us", "") ||
-        message.author?.replace("@c.us", "") ||
-        "";
+      // En mensajes directos usar from
+      senderNumber = message.from.replace("@c.us", "").replace("@g.us", "");
     }
 
-    // Validar que tengamos un número válido
-    if (!senderNumber) {
-      console.error("⚠️ No se pudo obtener el número del remitente");
+    // Validar número
+    if (!senderNumber || senderNumber.includes("@")) {
+      console.error("⚠️ Formato de número inválido:", senderNumber);
       return;
     }
 
-    // Número del receptor (tu número)
-    const reciberNumber = client.info.wid.user;
+    // Número del receptor
+    const reciberNumber =
+      client.info?.wid?.user || client.info?.me?.user || "desconocido";
 
-    // Capturar el contenido del mensaje
+    // Capturar contenido
     let captureMessage = "vacio";
 
-    // Obtener el texto del mensaje según el tipo
-    if (message.body && message.body.trim() !== "") {
-      captureMessage = message.body;
-    } else if (message.type === "image" || message.type === "video") {
-      captureMessage = message.caption || `[${message.type}]`;
-    } else if (message.type === "audio" || message.type === "ptt") {
-      captureMessage = "[audio]";
-    } else if (message.type === "document") {
-      captureMessage = "[documento]";
-    } else if (message.type === "location") {
-      captureMessage = "[ubicación]";
-    } else if (message.type === "sticker") {
-      captureMessage = "[sticker]";
+    switch (message.type) {
+      case "chat":
+        captureMessage = message.body || "vacio";
+        break;
+      case "image":
+      case "video":
+        captureMessage = message.caption || `[${message.type}]`;
+        break;
+      case "audio":
+      case "ptt":
+        captureMessage = "[audio]";
+        break;
+      case "document":
+        captureMessage = `[documento: ${
+          message._data?.filename || "sin nombre"
+        }]`;
+        break;
+      case "location":
+        captureMessage = "[ubicación]";
+        break;
+      case "sticker":
+        captureMessage = "[sticker]";
+        break;
+      default:
+        captureMessage = `[${message.type}]`;
     }
 
-    // Extraer solo el número (sin formato)
     const phoneNumber = senderNumber.replace(/\D/g, "");
-
-    // Verificar si es un mensaje directo (usuario) y no grupo
     const isDirectMessage = !isGroup;
 
     console.log({
       tipo: isGroup ? "Grupo" : "Usuario",
       de: senderNumber,
       para: reciberNumber,
-      mensaje: captureMessage,
+      mensaje: captureMessage.substring(0, 50), // Limitar log
       chat: senderJid,
     });
 
-    // Solo procesar mensajes directos de usuarios (no grupos)
-    if (isDirectMessage && phoneNumber !== "") {
-      // Preparar datos para enviar al webhook
+    // Solo procesar mensajes directos
+    if (isDirectMessage && phoneNumber) {
       const data = JSON.stringify({
         empresa: "sigcrm_clinicasancho",
         name: phoneNumber,
@@ -1269,9 +1273,9 @@ async function handleIncomingMessage(message, id_externo, client) {
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(data),
         },
+        timeout: 10000, // Timeout de 10 segundos
       };
 
-      // Realizar petición HTTP
       const req = https.request(options, (res) => {
         let responseData = "";
 
@@ -1280,10 +1284,13 @@ async function handleIncomingMessage(message, id_externo, client) {
         });
 
         res.on("end", () => {
-          console.log(
-            `✅ Webhook enviado para ${phoneNumber}: ${res.statusCode}`
-          );
-          // console.log("Response:", responseData);
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            console.log(`✅ Webhook OK para ${phoneNumber}: ${res.statusCode}`);
+          } else {
+            console.warn(
+              `⚠️ Webhook respondió ${res.statusCode} para ${phoneNumber}`
+            );
+          }
         });
       });
 
@@ -1291,18 +1298,23 @@ async function handleIncomingMessage(message, id_externo, client) {
         console.error("❌ Error enviando webhook:", error.message);
       });
 
+      req.on("timeout", () => {
+        console.error("❌ Timeout enviando webhook");
+        req.destroy();
+      });
+
       req.write(data);
       req.end();
 
-      console.log(
-        `📤 Mensaje enviado al webhook para: ${phoneNumber} - "${captureMessage}"`
-      );
-
-      // Opcional: Responder automáticamente (descomentado si lo necesitas)
-      // await message.reply("whatsapp on");
+      console.log(`📤 Mensaje procesado: ${phoneNumber}`);
     }
   } catch (error) {
-    console.error("❌ Error procesando mensaje entrante:", error);
+    console.error("❌ Error procesando mensaje:", {
+      error: error.message,
+      stack: error.stack,
+      from: message?.from,
+      type: message?.type,
+    });
   }
 }
 
