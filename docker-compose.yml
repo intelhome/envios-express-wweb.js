@@ -1,25 +1,24 @@
-version: "3.8"
-
 services:
-  whatsapp-api:
-    build: .
-    container_name: whatsapp-api
-    restart: unless-stopped
+  app:
+    container_name: envios-express-container
+    build:
+      context: .
+    image: envios-express-2024:latest
     ports:
       - "4010:4010"
     volumes:
-      # Sincronizar carpeta de sesiones con tu máquina local
-      - ./.wwebjs_auth:/usr/src/app/.wwebjs_auth
-      # Sincronizar carpeta de cache
-      - ./.wwebjs_cache:/usr/src/app/.wwebjs_cache
-      # Opcional: sincronizar logs
-      - ./logs:/usr/src/app/logs
-      # Opcional: sincronizar código para desarrollo (hot reload)
-      # - ./index.js:/usr/src/app/index.js
-      # - ./package.json:/usr/src/app/package.json
-    networks:
-      - whatsapp-network
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    environment:
+      NODE_ENV: production
+    restart: always
+    shm_size: '2gb'
 
-networks:
-  whatsapp-network:
-    driver: bridge
+  # nginx:
+  #   image: nginx:latest
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/conf.d/default.conf
+  #   depends_on:
+  #     - app
