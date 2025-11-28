@@ -11,6 +11,7 @@ const app = require("express")();
 const path = require("path");
 const { MessageMedia } = require("whatsapp-web.js");
 const https = require("https");
+const http = require("http");
 
 require("dotenv").config();
 
@@ -967,23 +968,23 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
     const sessionCollection = `session_auth_info_${id_externo}`;
 
     // Verificar si existe sesión en MongoDB
-    const savedSession = await mongoose.connection.db
-      .collection(sessionCollection)
-      .findOne({ key: "session_data" });
+    // const savedSession = await mongoose.connection.db
+    //   .collection(sessionCollection)
+    //   .findOne({ key: "session_data" });
 
-    if (savedSession) {
-      console.log(`✅ Sesión existente encontrada para: ${id_externo}`);
-    } else {
-      console.log(
-        `⚠️ No hay sesión guardada para: ${id_externo}, se generará QR`
-      );
-    }
+    // if (savedSession) {
+    //   console.log(`✅ Sesión existente encontrada para: ${id_externo}`);
+    // } else {
+    //   console.log(
+    //     `⚠️ No hay sesión guardada para: ${id_externo}, se generará QR`
+    //   );
+    // }
 
     // Crear sincronizador de MongoDB
-    const mongoSync = new MongoSessionSync(mongoose, id_externo);
+    // const mongoSync = new MongoSessionSync(mongoose, id_externo);
 
-    // Restaurar sesión desde MongoDB ANTES de crear el cliente
-    await mongoSync.restoreSession();
+    // // Restaurar sesión desde MongoDB ANTES de crear el cliente
+    // await mongoSync.restoreSession();
 
     const client = new Client({
       authStrategy: new LocalAuth({ clientId: id_externo }),
@@ -1057,16 +1058,16 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
       };
 
       // Verificar que la sesión se haya guardado
-      const sessionCollection = `session_auth_info_${id_externo}`;
-      const session = await mongoose.connection.db
-        .collection(sessionCollection)
-        .findOne({ key: "session_data" });
+      // const sessionCollection = `session_auth_info_${id_externo}`;
+      // const session = await mongoose.connection.db
+      //   .collection(sessionCollection)
+      //   .findOne({ key: "session_data" });
 
-      if (session) {
-        console.log(`✅ Sesión confirmada en BD para: ${id_externo}`);
-      } else {
-        console.log(`⚠️ Sesión NO se guardó en BD para: ${id_externo}`);
-      }
+      // if (session) {
+      //   console.log(`✅ Sesión confirmada en BD para: ${id_externo}`);
+      // } else {
+      //   console.log(`⚠️ Sesión NO se guardó en BD para: ${id_externo}`);
+      // }
     });
 
     // Desconexión
@@ -1164,7 +1165,16 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
     }
 
     // Inicializar cliente
-    await client.initialize();
+    // await client.initialize();
+    await Promise.race([
+      client.initialize(),
+      new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error("Timeout inicializando cliente")),
+          120000
+        )
+      ),
+    ]);
 
     return client;
   } catch (error) {
@@ -1278,6 +1288,7 @@ async function handleIncomingMessage(message, id_externo, client) {
 
       const req = https.request(options, (res) => {
         let responseData = "";
+        const startTime = Date.now();
 
         res.on("data", (chunk) => {
           responseData += chunk;
