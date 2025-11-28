@@ -1226,6 +1226,11 @@ async function handleIncomingMessage(message, id_externo, client) {
 
     // Capturar contenido
     let captureMessage = "vacio";
+    let base64Media = null;
+    let mediaMimeType = null;
+    let mediaFileName = null;
+    let hasMediaContent = false;
+    let originalWhatsAppMediaUrl = null;
 
     switch (message.type) {
       case "chat":
@@ -1233,16 +1238,14 @@ async function handleIncomingMessage(message, id_externo, client) {
         break;
       case "image":
       case "video":
-        captureMessage = message.caption || `[${message.type}]`;
+        captureMessage = message.caption || message.body || `[${message.type}]`;
         break;
       case "audio":
       case "ptt":
         captureMessage = "[audio]";
         break;
       case "document":
-        captureMessage = `[documento: ${
-          message._data?.filename || "sin nombre"
-        }]`;
+        captureMessage = `[documento: ${message._data?.filename || "sin nombre"}]`;
         break;
       case "location":
         captureMessage = "[ubicación]";
@@ -1252,6 +1255,23 @@ async function handleIncomingMessage(message, id_externo, client) {
         break;
       default:
         captureMessage = `[${message.type}]`;
+    }
+
+    if (message.hasMedia) {
+        try {
+            const media = await message.downloadMedia();
+            if (media) {
+                base64Media = media.data; 
+                mediaMimeType = media.mimetype;
+                
+                mediaFileName = media.filename || message._data?.filename || `${message.type}.${media.mimetype.split('/')[1]}`;
+                
+                hasMediaContent = true;
+                console.log(`[INFO] Archivo descargado. Tipo: ${mediaMimeType}`);
+            }
+        } catch (err) {
+            console.error("[ERROR] No se pudo descargar el media:", err);
+        }
     }
 
     const phoneNumber = senderNumber.replace(/\D/g, "");
@@ -1273,6 +1293,11 @@ async function handleIncomingMessage(message, id_externo, client) {
         senderNumber: senderNumber,
         reciberNumber: reciberNumber,
         description: captureMessage,
+        originalWhatsAppMediaUrl: originalWhatsAppMediaUrl || null, 
+        mediaDataBase64: base64Media || null,
+        mediaMimeType: mediaMimeType || null, 
+        mediaFileName: mediaFileName || null, 
+        hasMediaContent: hasMediaContent,
       });
 
       const options = {
