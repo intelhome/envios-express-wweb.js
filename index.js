@@ -6,7 +6,7 @@ const bodyParser = require("body-parser");
 const moment = require("moment-timezone");
 const { MongoClient } = require("mongodb");
 const mongoose = require("mongoose");
-const fs = require("fs");
+const fs = require("fs-extra");
 const app = require("express")();
 const path = require("path");
 const { MessageMedia } = require("whatsapp-web.js");
@@ -17,9 +17,6 @@ require("dotenv").config();
 
 const connectToMongoDB = require("./functions/connect-mongodb");
 const connectMongoose = require("./functions/connect-mongoose");
-
-const fs = require("fs-extra");
-const path = require("path");
 
 app.use(
   fileUpload({
@@ -970,27 +967,6 @@ async function cleanupSessionFiles(id_externo) {
 
 async function connectToWhatsApp(id_externo, receiveMessages) {
   try {
-    const sessionCollection = `session_auth_info_${id_externo}`;
-
-    // Verificar si existe sesión en MongoDB
-    // const savedSession = await mongoose.connection.db
-    //   .collection(sessionCollection)
-    //   .findOne({ key: "session_data" });
-
-    // if (savedSession) {
-    //   console.log(`✅ Sesión existente encontrada para: ${id_externo}`);
-    // } else {
-    //   console.log(
-    //     `⚠️ No hay sesión guardada para: ${id_externo}, se generará QR`
-    //   );
-    // }
-
-    // Crear sincronizador de MongoDB
-    // const mongoSync = new MongoSessionSync(mongoose, id_externo);
-
-    // // Restaurar sesión desde MongoDB ANTES de crear el cliente
-    // await mongoSync.restoreSession();
-
     const client = new Client({
       authStrategy: new LocalAuth({ clientId: id_externo }),
       puppeteer: {
@@ -1061,18 +1037,6 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
         qrGeneratedAt: null,
         qrCode: null,
       };
-
-      // Verificar que la sesión se haya guardado
-      // const sessionCollection = `session_auth_info_${id_externo}`;
-      // const session = await mongoose.connection.db
-      //   .collection(sessionCollection)
-      //   .findOne({ key: "session_data" });
-
-      // if (session) {
-      //   console.log(`✅ Sesión confirmada en BD para: ${id_externo}`);
-      // } else {
-      //   console.log(`⚠️ Sesión NO se guardó en BD para: ${id_externo}`);
-      // }
     });
 
     // Desconexión
@@ -1087,8 +1051,14 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
         console.log(`✅ Sesión eliminada de memoria: ${id_externo}`);
       }
 
+      const shouldReconnect =
+        reason !== "LOGOUT" &&
+        reason !== "Max qrcode retries reached" &&
+        reason !== "NAVIGATION";
+
       // Reconectar si no fue logout
-      if (reason !== "LOGOUT") {
+      if (shouldReconnect) {
+        // Casos de desconexión temporal (internet, conflicto, etc.)
         console.log(`🔄 Reconectando en 5s para: ${id_externo}`);
         setTimeout(() => {
           connectToWhatsApp(id_externo, receiveMessages);
@@ -1097,18 +1067,8 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
         console.log(`🗑️ Logout detectado, eliminando datos: ${id_externo}`);
 
         try {
-          // Eliminar de la base de datos
-          // await whatsapp_registros.deleteOne({ id_externo: id_externo });
-          // console.log(`✅ Registro eliminado: ${id_externo}`);
-
-          // Eliminar sesión de MongoDB
-          // const sessionResult = await mongoose.connection.db
-          //   .collection("whatsapp_sessions")
-          //   .deleteOne({ session: id_externo });
-
-          if (sessionResult.deletedCount > 0) {
-            console.log(`✅ Sesión eliminada de MongoDB: ${id_externo}`);
-          }
+          await removeRegistro(id_externo);
+          await cleanupSessionFiles(id_externo);
 
           // Limpiar socket
           if (global.userSockets && global.userSockets[id_externo]) {
@@ -1127,9 +1087,6 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
           console.error(`Error en limpieza después de logout:`, error);
         }
       }
-
-      await removeRegistro(id_externo);
-      await cleanupSessionFiles(id_externo);
     });
 
     // Error de autenticación
