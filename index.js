@@ -11,6 +11,7 @@ const app = require("express")();
 const path = require("path");
 const { MessageMedia } = require("whatsapp-web.js");
 const https = require("https");
+const http = require("http");
 
 require("dotenv").config();
 
@@ -967,23 +968,23 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
     const sessionCollection = `session_auth_info_${id_externo}`;
 
     // Verificar si existe sesión en MongoDB
-    const savedSession = await mongoose.connection.db
-      .collection(sessionCollection)
-      .findOne({ key: "session_data" });
+    // const savedSession = await mongoose.connection.db
+    //   .collection(sessionCollection)
+    //   .findOne({ key: "session_data" });
 
-    if (savedSession) {
-      console.log(`✅ Sesión existente encontrada para: ${id_externo}`);
-    } else {
-      console.log(
-        `⚠️ No hay sesión guardada para: ${id_externo}, se generará QR`
-      );
-    }
+    // if (savedSession) {
+    //   console.log(`✅ Sesión existente encontrada para: ${id_externo}`);
+    // } else {
+    //   console.log(
+    //     `⚠️ No hay sesión guardada para: ${id_externo}, se generará QR`
+    //   );
+    // }
 
     // Crear sincronizador de MongoDB
-    const mongoSync = new MongoSessionSync(mongoose, id_externo);
+    // const mongoSync = new MongoSessionSync(mongoose, id_externo);
 
-    // Restaurar sesión desde MongoDB ANTES de crear el cliente
-    await mongoSync.restoreSession();
+    // // Restaurar sesión desde MongoDB ANTES de crear el cliente
+    // await mongoSync.restoreSession();
 
     const client = new Client({
       authStrategy: new LocalAuth({ clientId: id_externo }),
@@ -1057,16 +1058,16 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
       };
 
       // Verificar que la sesión se haya guardado
-      const sessionCollection = `session_auth_info_${id_externo}`;
-      const session = await mongoose.connection.db
-        .collection(sessionCollection)
-        .findOne({ key: "session_data" });
+      // const sessionCollection = `session_auth_info_${id_externo}`;
+      // const session = await mongoose.connection.db
+      //   .collection(sessionCollection)
+      //   .findOne({ key: "session_data" });
 
-      if (session) {
-        console.log(`✅ Sesión confirmada en BD para: ${id_externo}`);
-      } else {
-        console.log(`⚠️ Sesión NO se guardó en BD para: ${id_externo}`);
-      }
+      // if (session) {
+      //   console.log(`✅ Sesión confirmada en BD para: ${id_externo}`);
+      // } else {
+      //   console.log(`⚠️ Sesión NO se guardó en BD para: ${id_externo}`);
+      // }
     });
 
     // Desconexión
@@ -1164,7 +1165,16 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
     }
 
     // Inicializar cliente
-    await client.initialize();
+    // await client.initialize();
+    await Promise.race([
+      client.initialize(),
+      new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error("Timeout inicializando cliente")),
+          120000
+        )
+      ),
+    ]);
 
     return client;
   } catch (error) {
@@ -1216,33 +1226,59 @@ async function handleIncomingMessage(message, id_externo, client) {
 
     // Capturar contenido
     let captureMessage = "vacio";
+    let base64Media = null;
+    let mediaMimeType = null;
+    let mediaFileName = null;
+    let hasMediaContent = false;
+    let originalWhatsAppMediaUrl = message._data?.deprecatedMms3Url || message._data?.clientUrl || null;
+
+    if (message.hasMedia) {
+        try {
+            console.log(`[INFO] Descargando multimedia...`);
+            const media = await message.downloadMedia();
+            
+            if (media) {
+                base64Media = media.data;
+                mediaMimeType = media.mimetype;
+                
+                const extension = mediaMimeType.split('/')[1]?.split(';')[0] || 'bin';
+                mediaFileName = media.filename || message._data?.filename || `${message.type}_${Date.now()}.${extension}`;
+                
+                hasMediaContent = true;
+                console.log(`[INFO] Multimedia descargada correctamente. Tamaño: ${base64Media.length}`);
+            }
+        } catch (err) {
+            console.error("[ERROR] Fallo al descargar media:", err);
+            captureMessage += " [Error descargando archivo]";
+        }
+    }
 
     switch (message.type) {
-      case "chat":
-        captureMessage = message.body || "vacio";
-        break;
-      case "image":
-      case "video":
-        captureMessage = message.caption || `[${message.type}]`;
-        break;
-      case "audio":
-      case "ptt":
-        captureMessage = "[audio]";
-        break;
-      case "document":
-        captureMessage = `[documento: ${
-          message._data?.filename || "sin nombre"
-        }]`;
-        break;
-      case "location":
-        captureMessage = "[ubicación]";
-        break;
-      case "sticker":
-        captureMessage = "[sticker]";
-        break;
-      default:
-        captureMessage = `[${message.type}]`;
+        case "chat":
+            captureMessage = message.body;
+            break;
+        case "image":
+        case "video":
+            captureMessage = message.caption || message.body || "";
+            break;
+        case "audio":
+        case "ptt":
+            captureMessage = "";
+            break;
+        case "document":
+            captureMessage = message.caption || message.body || "";
+            break;
+        case "location":
+            captureMessage = `[ubicación] ${message.body || ''}`;
+            break;
+        case "sticker":
+            captureMessage = "[sticker]";
+            break;
+        default:
+            captureMessage = message.body || `[${message.type}]`;
     }
+    
+    if (!captureMessage) captureMessage = "";
 
     const phoneNumber = senderNumber.replace(/\D/g, "");
     const isDirectMessage = !isGroup;
@@ -1263,6 +1299,11 @@ async function handleIncomingMessage(message, id_externo, client) {
         senderNumber: senderNumber,
         reciberNumber: reciberNumber,
         description: captureMessage,
+        originalWhatsAppMediaUrl: originalWhatsAppMediaUrl || null, 
+        mediaDataBase64: base64Media || null,
+        mediaMimeType: mediaMimeType || null, 
+        mediaFileName: mediaFileName || null, 
+        hasMediaContent: hasMediaContent,
       });
 
       const options = {
@@ -1278,6 +1319,7 @@ async function handleIncomingMessage(message, id_externo, client) {
 
       const req = https.request(options, (res) => {
         let responseData = "";
+        const startTime = Date.now();
 
         res.on("data", (chunk) => {
           responseData += chunk;
