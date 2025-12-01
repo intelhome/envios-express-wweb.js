@@ -1230,49 +1230,55 @@ async function handleIncomingMessage(message, id_externo, client) {
     let mediaMimeType = null;
     let mediaFileName = null;
     let hasMediaContent = false;
-    let originalWhatsAppMediaUrl = null;
-
-    switch (message.type) {
-      case "chat":
-        captureMessage = message.body || "vacio";
-        break;
-      case "image":
-      case "video":
-        captureMessage = message.caption || message.body || `[${message.type}]`;
-        break;
-      case "audio":
-      case "ptt":
-        captureMessage = "[audio]";
-        break;
-      case "document":
-        captureMessage = `[documento: ${message._data?.filename || "sin nombre"}]`;
-        break;
-      case "location":
-        captureMessage = "[ubicación]";
-        break;
-      case "sticker":
-        captureMessage = "[sticker]";
-        break;
-      default:
-        captureMessage = `[${message.type}]`;
-    }
+    let originalWhatsAppMediaUrl = message._data?.deprecatedMms3Url || message._data?.clientUrl || null;
 
     if (message.hasMedia) {
         try {
+            console.log(`[INFO] Descargando multimedia...`);
             const media = await message.downloadMedia();
+            
             if (media) {
-                base64Media = media.data; 
+                base64Media = media.data;
                 mediaMimeType = media.mimetype;
                 
-                mediaFileName = media.filename || message._data?.filename || `${message.type}.${media.mimetype.split('/')[1]}`;
+                const extension = mediaMimeType.split('/')[1]?.split(';')[0] || 'bin';
+                mediaFileName = media.filename || message._data?.filename || `${message.type}_${Date.now()}.${extension}`;
                 
                 hasMediaContent = true;
-                console.log(`[INFO] Archivo descargado. Tipo: ${mediaMimeType}`);
+                console.log(`[INFO] Multimedia descargada correctamente. Tamaño: ${base64Media.length}`);
             }
         } catch (err) {
-            console.error("[ERROR] No se pudo descargar el media:", err);
+            console.error("[ERROR] Fallo al descargar media:", err);
+            captureMessage += " [Error descargando archivo]";
         }
     }
+
+    switch (message.type) {
+        case "chat":
+            captureMessage = message.body;
+            break;
+        case "image":
+        case "video":
+            captureMessage = message.caption || message.body || "";
+            break;
+        case "audio":
+        case "ptt":
+            captureMessage = "";
+            break;
+        case "document":
+            captureMessage = message.caption || message.body || "";
+            break;
+        case "location":
+            captureMessage = `[ubicación] ${message.body || ''}`;
+            break;
+        case "sticker":
+            captureMessage = "[sticker]";
+            break;
+        default:
+            captureMessage = message.body || `[${message.type}]`;
+    }
+    
+    if (!captureMessage) captureMessage = "";
 
     const phoneNumber = senderNumber.replace(/\D/g, "");
     const isDirectMessage = !isGroup;
