@@ -17,9 +17,9 @@ require("dotenv").config();
 
 const connectToMongoDB = require("./functions/connect-mongodb");
 const connectMongoose = require("./functions/connect-mongoose");
-const MongoSessionSync = require("./functions/MongoSessionSync");
 
-const { MongoStore } = require("wwebjs-mongo");
+const fs = require("fs-extra");
+const path = require("path");
 
 app.use(
   fileUpload({
@@ -827,57 +827,6 @@ function getAckStatus(ack) {
   return statuses[ack] || "Desconocido";
 }
 
-async function deleteRemoteSession(id_externo) {
-  try {
-    const sessionName = `session_auth_info_${id_externo}`;
-
-    const deleteResult = await whatsapp_registros.deleteOne({
-      id_externo: id_externo,
-    });
-
-    if (deleteResult.deletedCount > 0) {
-      console.log(`✅ Sesión remota eliminada: ${id_externo}`);
-
-      try {
-        // Eliminar colección de sesión (de forma más robusta)
-        const collections = await db
-          .listCollections({ name: sessionName })
-          .toArray()
-          .catch((err) => {
-            throw new Error(`Error al listar colecciones: ${err.message}`);
-          });
-
-        if (collections.length > 0) {
-          await db
-            .collection(sessionName)
-            .drop()
-            .then(() => {
-              console.log(`Colección ${sessionName} eliminada correctamente.`);
-            })
-            .catch((err) => {
-              throw new Error(`Error al eliminar colección: ${err.message}`);
-            });
-        } else {
-          console.log(`La colección ${sessionName} no existe.`);
-        }
-      } catch (collectionError) {
-        console.error(`Error eliminando colección de sesión:`, collectionError);
-      }
-
-      return true;
-    } else {
-      console.log(`⚠️ No se encontró sesión remota para: ${id_externo}`);
-      return false;
-    }
-  } catch (error) {
-    console.error(
-      `❌ Error eliminando sesión remota ${id_externo}:`,
-      error.message
-    );
-    return false;
-  }
-}
-
 async function removeRegistro(id_externo) {
   try {
     console.log(`🗑️ Eliminando registro para: ${id_externo}`);
@@ -960,6 +909,62 @@ async function removeRegistro(id_externo) {
   } catch (error) {
     console.error(`❌ Error eliminando registro ${id_externo}:`, error);
     return false;
+  }
+}
+
+async function cleanupSessionFiles(id_externo) {
+  try {
+    console.log(`🗑️ Limpiando archivos de sesión para: ${id_externo}`);
+
+    // Rutas específicas de ESTA sesión
+    const authPath = path.join(
+      __dirname,
+      ".wwebjs_auth",
+      `session-${id_externo}`
+    );
+    const cachePath = path.join(
+      __dirname,
+      ".wwebjs_cache",
+      `session-${id_externo}`
+    );
+
+    let deletedAuth = false;
+    let deletedCache = false;
+
+    // Eliminar SOLO la carpeta de esta sesión en auth
+    if (await fs.pathExists(authPath)) {
+      await fs.remove(authPath);
+      deletedAuth = true;
+      console.log(`✅ Sesión eliminada de auth: ${authPath}`);
+    } else {
+      console.log(`ℹ️ No existe sesión en auth: ${authPath}`);
+    }
+
+    // Eliminar SOLO la carpeta de esta sesión en cache
+    if (await fs.pathExists(cachePath)) {
+      await fs.remove(cachePath);
+      deletedCache = true;
+      console.log(`✅ Sesión eliminada de cache: ${cachePath}`);
+    } else {
+      console.log(`ℹ️ No existe sesión en cache: ${cachePath}`);
+    }
+
+    // Resumen
+    if (deletedAuth || deletedCache) {
+      console.log(
+        `✅ Archivos de sesión ${id_externo} eliminados exitosamente`
+      );
+      return { success: true, message: "Archivos de sesión eliminados" };
+    } else {
+      console.log(`⚠️ No se encontraron archivos para eliminar: ${id_externo}`);
+      return { success: true, message: "No había archivos para eliminar" };
+    }
+  } catch (error) {
+    console.error(
+      `❌ Error limpiando archivos de sesión para ${id_externo}:`,
+      error
+    );
+    return { success: false, message: error.message };
   }
 }
 
@@ -1089,19 +1094,17 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
           connectToWhatsApp(id_externo, receiveMessages);
         }, 5000);
       } else {
-        // Si fue logout, eliminar todo pero NO destruir el cliente
-        // (ya fue destruido automáticamente por el logout)
         console.log(`🗑️ Logout detectado, eliminando datos: ${id_externo}`);
 
         try {
           // Eliminar de la base de datos
-          await whatsapp_registros.deleteOne({ id_externo: id_externo });
-          console.log(`✅ Registro eliminado: ${id_externo}`);
+          // await whatsapp_registros.deleteOne({ id_externo: id_externo });
+          // console.log(`✅ Registro eliminado: ${id_externo}`);
 
           // Eliminar sesión de MongoDB
-          const sessionResult = await mongoose.connection.db
-            .collection("whatsapp_sessions")
-            .deleteOne({ session: id_externo });
+          // const sessionResult = await mongoose.connection.db
+          //   .collection("whatsapp_sessions")
+          //   .deleteOne({ session: id_externo });
 
           if (sessionResult.deletedCount > 0) {
             console.log(`✅ Sesión eliminada de MongoDB: ${id_externo}`);
@@ -1124,6 +1127,9 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
           console.error(`Error en limpieza después de logout:`, error);
         }
       }
+
+      await removeRegistro(id_externo);
+      await cleanupSessionFiles(id_externo);
     });
 
     // Error de autenticación
@@ -1134,7 +1140,7 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
         error_msg: msg,
       });
 
-      await deleteRemoteSession(id_externo, store);
+      await removeRegistro(id_externo);
     });
 
     // ============================================
@@ -1230,54 +1236,60 @@ async function handleIncomingMessage(message, id_externo, client) {
     let mediaMimeType = null;
     let mediaFileName = null;
     let hasMediaContent = false;
-    let originalWhatsAppMediaUrl = message._data?.deprecatedMms3Url || message._data?.clientUrl || null;
+    let originalWhatsAppMediaUrl =
+      message._data?.deprecatedMms3Url || message._data?.clientUrl || null;
 
     if (message.hasMedia) {
-        try {
-            console.log(`[INFO] Descargando multimedia...`);
-            const media = await message.downloadMedia();
-            
-            if (media) {
-                base64Media = media.data;
-                mediaMimeType = media.mimetype;
-                
-                const extension = mediaMimeType.split('/')[1]?.split(';')[0] || 'bin';
-                mediaFileName = media.filename || message._data?.filename || `${message.type}_${Date.now()}.${extension}`;
-                
-                hasMediaContent = true;
-                console.log(`[INFO] Multimedia descargada correctamente. Tamaño: ${base64Media.length}`);
-            }
-        } catch (err) {
-            console.error("[ERROR] Fallo al descargar media:", err);
-            captureMessage += " [Error descargando archivo]";
+      try {
+        console.log(`[INFO] Descargando multimedia...`);
+        const media = await message.downloadMedia();
+
+        if (media) {
+          base64Media = media.data;
+          mediaMimeType = media.mimetype;
+
+          const extension = mediaMimeType.split("/")[1]?.split(";")[0] || "bin";
+          mediaFileName =
+            media.filename ||
+            message._data?.filename ||
+            `${message.type}_${Date.now()}.${extension}`;
+
+          hasMediaContent = true;
+          console.log(
+            `[INFO] Multimedia descargada correctamente. Tamaño: ${base64Media.length}`
+          );
         }
+      } catch (err) {
+        console.error("[ERROR] Fallo al descargar media:", err);
+        captureMessage += " [Error descargando archivo]";
+      }
     }
 
     switch (message.type) {
-        case "chat":
-            captureMessage = message.body;
-            break;
-        case "image":
-        case "video":
-            captureMessage = message.caption || message.body || "";
-            break;
-        case "audio":
-        case "ptt":
-            captureMessage = "";
-            break;
-        case "document":
-            captureMessage = message.caption || message.body || "";
-            break;
-        case "location":
-            captureMessage = `[ubicación] ${message.body || ''}`;
-            break;
-        case "sticker":
-            captureMessage = "[sticker]";
-            break;
-        default:
-            captureMessage = message.body || `[${message.type}]`;
+      case "chat":
+        captureMessage = message.body;
+        break;
+      case "image":
+      case "video":
+        captureMessage = message.caption || message.body || "";
+        break;
+      case "audio":
+      case "ptt":
+        captureMessage = "";
+        break;
+      case "document":
+        captureMessage = message.caption || message.body || "";
+        break;
+      case "location":
+        captureMessage = `[ubicación] ${message.body || ""}`;
+        break;
+      case "sticker":
+        captureMessage = "[sticker]";
+        break;
+      default:
+        captureMessage = message.body || `[${message.type}]`;
     }
-    
+
     if (!captureMessage) captureMessage = "";
 
     const phoneNumber = senderNumber.replace(/\D/g, "");
@@ -1299,10 +1311,10 @@ async function handleIncomingMessage(message, id_externo, client) {
         senderNumber: senderNumber,
         reciberNumber: reciberNumber,
         description: captureMessage,
-        originalWhatsAppMediaUrl: originalWhatsAppMediaUrl || null, 
+        originalWhatsAppMediaUrl: originalWhatsAppMediaUrl || null,
         mediaDataBase64: base64Media || null,
-        mediaMimeType: mediaMimeType || null, 
-        mediaFileName: mediaFileName || null, 
+        mediaMimeType: mediaMimeType || null,
+        mediaFileName: mediaFileName || null,
         hasMediaContent: hasMediaContent,
       });
 

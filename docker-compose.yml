@@ -1,25 +1,26 @@
-version: "3.8"
-
 services:
   whatsapp-api:
     build: .
-    container_name: whatsapp-api
+    container_name: envios-express-container
     restart: unless-stopped
     ports:
       - "4010:4010"
     volumes:
-      # Sincronizar carpeta de sesiones con tu máquina local
-      - ./.wwebjs_auth:/usr/src/app/.wwebjs_auth
-      # Sincronizar carpeta de cache
-      - ./.wwebjs_cache:/usr/src/app/.wwebjs_cache
-      # Opcional: sincronizar logs
+      # Volumen nombrado para sesiones (más estable)
+      - wwebjs_auth:/usr/src/app/.wwebjs_auth
+      - wwebjs_cache:/usr/src/app/.wwebjs_cache
       - ./logs:/usr/src/app/logs
-      # Opcional: sincronizar código para desarrollo (hot reload)
-      # - ./index.js:/usr/src/app/index.js
-      # - ./package.json:/usr/src/app/package.json
+    environment:
+      - NODE_ENV=production
     networks:
       - whatsapp-network
 
 networks:
   whatsapp-network:
     driver: bridge
+
+volumes:
+  wwebjs_auth:
+    driver: local
+  wwebjs_cache:
+    driver: local
