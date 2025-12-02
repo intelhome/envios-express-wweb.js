@@ -2,7 +2,7 @@ services:
   whatsapp-api:
     build: .
     container_name: envios-express-container
-    restart: unless-stopped
+    restart: always
     ports:
       - "4010:4010"
     volumes:
