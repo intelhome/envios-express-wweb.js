@@ -971,21 +971,25 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
       authStrategy: new LocalAuth({ clientId: id_externo }),
       puppeteer: {
         headless: true,
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
         args: [
           "--no-sandbox",
           "--disable-setuid-sandbox",
           "--disable-dev-shm-usage",
-          "--disable-accelerated-2d-canvas",
-          "--no-first-run",
-          "--no-zygote",
           "--disable-gpu",
+          "--disable-extensions",
+          "--disable-infobars",
+          "--window-size=1920,1080",
+          "--disable-background-timer-throttling",
+          "--disable-backgrounding-occluded-windows",
+          "--disable-renderer-backgrounding",
         ],
       },
-      qrMaxRetries: 5, // Número de veces que se regenerará el QR (5 QRs = ~5 minutos)
-      authTimeoutMs: 0, // Desactiva timeout de autenticación (0 = sin límite)
-      qrTimeoutMs: 0, // CRÍTICO: Desactiva el timeout del QR (0 = sin límite)
-      restartOnAuthFail: true, // Reiniciar si falla la autenticación
-      takeoverOnConflict: false, // No tomar control si hay otra sesión activa
+      qrMaxRetries: 5,
+      authTimeoutMs: 0,
+      qrTimeoutMs: 0,
+      restartOnAuthFail: true,
+      takeoverOnConflict: false,
       takeoverTimeoutMs: 0,
       webVersionCache: {
         type: "remote",
