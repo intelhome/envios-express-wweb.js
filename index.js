@@ -330,19 +330,21 @@ app.delete("/eliminar-usuario/:id_externo", async (req, res) => {
     const registros = await getUserRecords();
 
     if (!registros) {
-      res.status(400).json({
+      return res.status(400).json({
         result: false,
         error: "No existen aun registros",
       });
     }
 
     if (id_externo) {
-      await logoutWhatsApp(id_externo);
-      await removeRegistro(id_externo);
+      // Solo llama a logoutWhatsApp
+      // El evento 'disconnected' se encargará de llamar removeRegistro()
+      const result = await logoutWhatsApp(id_externo);
 
       console.log(
         `---------------------------------- SE ELIMINARON LAS FUNCIONES PARA ${id_externo} ----------------------------------`
       );
+
       res.json({
         result: true,
         id: id_externo,
@@ -854,7 +856,6 @@ async function removeRegistro(id_externo) {
       // Destruir el cliente si existe y está activo
       if (client) {
         try {
-          // Verificar el estado antes de destruir
           const state = await client.getState().catch(() => null);
 
           if (state) {
@@ -865,7 +866,6 @@ async function removeRegistro(id_externo) {
             console.log(`⚠️ Cliente ya estaba destruido: ${id_externo}`);
           }
         } catch (error) {
-          // Si el cliente ya fue destruido, ignorar el error
           if (
             error.message.includes("Session closed") ||
             error.message.includes("Target closed")
@@ -887,7 +887,25 @@ async function removeRegistro(id_externo) {
       console.log(`✅ Sesión eliminada de memoria: ${id_externo}`);
     }
 
-    // 4. Limpiar socket del usuario
+    // 4. Eliminar archivos físicos de .wwebjs_auth
+    try {
+      const sessionPath = path.join(__dirname, '.wwebjs_auth', `session-${id_externo}`);
+
+      // Verificar si existe el directorio
+      try {
+        await fs.access(sessionPath);
+        // Si existe, eliminarlo recursivamente
+        await fs.rm(sessionPath, { recursive: true, force: true });
+        console.log(`✅ Archivos de sesión eliminados: ${sessionPath}`);
+      } catch (err) {
+        // No existe o ya fue eliminado
+        console.log(`⚠️ No se encontraron archivos de sesión en: ${sessionPath}`);
+      }
+    } catch (error) {
+      console.error(`❌ Error eliminando archivos de sesión:`, error.message);
+    }
+
+    // 5. Limpiar socket del usuario
     if (global.userSockets && global.userSockets[id_externo]) {
       const socketId = global.userSockets[id_externo];
       const userSocket = global.io?.sockets.sockets.get(socketId);
@@ -965,6 +983,191 @@ async function cleanupSessionFiles(id_externo) {
   }
 }
 
+// async function connectToWhatsApp(id_externo, receiveMessages) {
+//   try {
+//     const client = new Client({
+//       authStrategy: new LocalAuth({ clientId: id_externo }),
+//       puppeteer: {
+//         headless: true,
+//         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+//         args: [
+//           "--no-sandbox",
+//           "--disable-setuid-sandbox",
+//           "--disable-dev-shm-usage",
+//           "--disable-gpu",
+//           "--disable-extensions",
+//           "--disable-infobars",
+//           "--window-size=1920,1080",
+//           "--disable-background-timer-throttling",
+//           "--disable-backgrounding-occluded-windows",
+//           "--disable-renderer-backgrounding",
+//         ],
+//       },
+//       qrMaxRetries: 5,
+//       authTimeoutMs: 0,
+//       qrTimeoutMs: 0,
+//       restartOnAuthFail: true,
+//       takeoverOnConflict: false,
+//       takeoverTimeoutMs: 0,
+//       webVersionCache: {
+//         type: "remote",
+//         remotePath:
+//           "https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html",
+//       },
+//     });
+
+//     // ============================================
+//     // EVENTOS DEL CLIENTE
+//     // ============================================
+//     // QR Code
+//     client.on("qr", async (qr) => {
+//       console.log(`📱 QR Code generado para: ${id_externo}`);
+
+//       const QRCode = require("qrcode");
+//       const qrCodeData = await QRCode.toDataURL(qr);
+
+//       // Actualizar en DB y enviar por socket
+//       await updateQR("qr", id_externo, qrCodeData);
+
+//       // Actualizar en DB
+//       await updateConnectionStatus(id_externo, "qr", null, qrCodeData);
+
+//       WhatsAppSessions[id_externo] = {
+//         client: client,
+//         connectedAt: null,
+//         qrGeneratedAt: Date.now(),
+//         qrCode: qrCodeData,
+//       };
+//     });
+
+//     // Autenticación exitosa
+//     client.on("authenticated", async () => {
+//       console.log(`✅ Autenticado: ${id_externo}`);
+//       await updateUserRecord(id_externo, { estado: "autenticado" });
+//     });
+
+//     // Listo para usar
+//     client.on("ready", async () => {
+//       console.log(`✔️ Cliente listo: ${id_externo}`);
+
+//       await updateUserRecord(id_externo, { estado: "conectado" });
+//       await updateQR("connected", id_externo);
+
+//       WhatsAppSessions[id_externo] = {
+//         client: client,
+//         connectedAt: Date.now(),
+//         qrGeneratedAt: null,
+//         qrCode: null,
+//       };
+//     });
+
+//     // Desconexión
+//     client.on("disconnected", async (reason) => {
+//       console.log(`❌ Desconectado ${id_externo}:`, reason);
+
+//       await updateConnectionStatus(id_externo, "close", reason, null);
+
+//       // Limpiar sesión de memoria (sin destruir el cliente, ya está desconectado)
+//       if (WhatsAppSessions[id_externo]) {
+//         delete WhatsAppSessions[id_externo];
+//         console.log(`✅ Sesión eliminada de memoria: ${id_externo}`);
+//       }
+
+//       const shouldReconnect =
+//         reason !== "LOGOUT" &&
+//         reason !== "Max qrcode retries reached" &&
+//         reason !== "NAVIGATION";
+
+//       // Reconectar si no fue logout
+//       if (shouldReconnect) {
+//         // Casos de desconexión temporal (internet, conflicto, etc.)
+//         console.log(`🔄 Reconectando en 5s para: ${id_externo}`);
+//         setTimeout(() => {
+//           connectToWhatsApp(id_externo, receiveMessages);
+//         }, 5000);
+//       } else {
+//         console.log(`🗑️ Logout detectado, eliminando datos: ${id_externo}`);
+
+//         try {
+//           await removeRegistro(id_externo);
+//           await cleanupSessionFiles(id_externo);
+
+//           // Limpiar socket
+//           if (global.userSockets && global.userSockets[id_externo]) {
+//             const socketId = global.userSockets[id_externo];
+//             const userSocket = global.io?.sockets.sockets.get(socketId);
+
+//             if (userSocket) {
+//               userSocket.emit("log", "Sesión cerrada correctamente");
+//               userSocket.emit("qrstatus", "/assets/disconnected.svg");
+//             }
+
+//             delete global.userSockets[id_externo];
+//             console.log(`✅ Socket limpiado: ${id_externo}`);
+//           }
+//         } catch (error) {
+//           console.error(`Error en limpieza después de logout:`, error);
+//         }
+//       }
+//     });
+
+//     // Error de autenticación
+//     client.on("auth_failure", async (msg) => {
+//       console.error(`❌ Error de autenticación ${id_externo}:`, msg);
+//       await updateUserRecord(id_externo, {
+//         estado: "error_autenticacion",
+//         error_msg: msg,
+//       });
+
+//       await removeRegistro(id_externo);
+//     });
+
+//     // ============================================
+//     // RECEPCIÓN DE MENSAJES (NUEVA FUNCIONALIDAD)
+//     // ============================================
+//     if (receiveMessages) {
+//       client.on("message", async (message) => {
+//         await handleIncomingMessage(message, id_externo, client);
+//       });
+
+//       // Escuchar cambios en mensajes (ediciones, eliminaciones)
+//       client.on("message_revoke_everyone", async (revokedMsg) => {
+//         console.log(
+//           `🗑️ Mensaje eliminado por el remitente: ${revokedMsg.id._serialized}`
+//         );
+//       });
+
+//       // Escuchar cuando alguien está escribiendo
+//       client.on("message_create", async (message) => {
+//         // Este evento se dispara para TODOS los mensajes, incluso los que envías tú
+//         // Útil si necesitas procesar también tus mensajes enviados
+//         if (message.fromMe) {
+//           console.log(`📤 Mensaje enviado por ti: ${message.body}`);
+//         }
+//       });
+
+//       console.log(`📩 Recepción de mensajes activada para: ${id_externo}`);
+//     }
+
+//     // Inicializar cliente
+//     // await client.initialize();
+//     await Promise.race([
+//       client.initialize(),
+//       new Promise((_, reject) =>
+//         setTimeout(
+//           () => reject(new Error("Timeout inicializando cliente")),
+//           120000
+//         )
+//       ),
+//     ]);
+
+//     return client;
+//   } catch (error) {
+//     console.error(`Error conectando WhatsApp para ${id_externo}:`, error);
+//     throw error;
+//   }
+// }
+
 async function connectToWhatsApp(id_externo, receiveMessages) {
   try {
     const client = new Client({
@@ -977,41 +1180,96 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
           "--disable-setuid-sandbox",
           "--disable-dev-shm-usage",
           "--disable-gpu",
+
+          // OPTIMIZACIONES CRÍTICAS DE MEMORIA
+          "--disable-software-rasterizer",
           "--disable-extensions",
           "--disable-infobars",
-          "--window-size=1920,1080",
           "--disable-background-timer-throttling",
           "--disable-backgrounding-occluded-windows",
           "--disable-renderer-backgrounding",
+          "--disable-sync",
+          "--disable-translate",
+          "--disable-features=TranslateUI",
+          "--disable-features=Translate",
+
+          // Reducir uso de memoria
+          "--single-process", // ⚠️ Menos estable pero usa MUCHA menos RAM
+          "--no-zygote", // Reduce procesos hijo
+          "--disable-accelerated-2d-canvas",
+          "--disable-accelerated-jpeg-decoding",
+          "--disable-accelerated-mjpeg-decode",
+          "--disable-accelerated-video-decode",
+
+          // Limitar recursos
+          "--memory-pressure-off",
+          "--max-old-space-size=512", // Limitar heap de V8 a 512MB por instancia
+
+          // Ventana más pequeña = menos memoria
+          "--window-size=800,600", // Era 1920x1080, esto ahorra mucho
+
+          // Deshabilitar funciones innecesarias
+          "--disable-default-apps",
+          "--disable-domain-reliability",
+          "--disable-background-networking",
+          "--disable-breakpad",
+          "--disable-component-extensions-with-background-pages",
+          "--disable-features=AudioServiceOutOfProcess",
+          "--disable-features=IsolateOrigins",
+          "--disable-features=site-per-process",
+          "--disable-ipc-flooding-protection",
+          "--disable-hang-monitor",
+          "--disable-prompt-on-repost",
+          "--disable-client-side-phishing-detection",
+          "--disable-notifications",
+          "--disable-offer-store-unmasked-wallet-cards",
+          "--disable-speech-api",
+          "--hide-scrollbars",
+          "--mute-audio",
+          "--no-first-run",
+          "--no-default-browser-check",
+          "--disable-dinosaur-easter-egg",
+          "--disable-crash-reporter",
+          "--disable-features=CalculateNativeWinOcclusion",
         ],
+
+        // Limitar recursos adicionales
+        defaultViewport: {
+          width: 800,
+          height: 600,
+          deviceScaleFactor: 1,
+        },
+
+        // Timeout más agresivo
+        timeout: 60000,
       },
+
       qrMaxRetries: 5,
       authTimeoutMs: 0,
       qrTimeoutMs: 0,
       restartOnAuthFail: true,
       takeoverOnConflict: false,
       takeoverTimeoutMs: 0,
+
       webVersionCache: {
         type: "remote",
         remotePath:
           "https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html",
       },
+
+      // NUEVO: Limitar caché
+      userDataDir: `./sessions/${id_externo}`,
     });
 
     // ============================================
-    // EVENTOS DEL CLIENTE
+    // EVENTOS DEL CLIENTE (sin cambios)
     // ============================================
-    // QR Code
+
     client.on("qr", async (qr) => {
       console.log(`📱 QR Code generado para: ${id_externo}`);
-
       const QRCode = require("qrcode");
       const qrCodeData = await QRCode.toDataURL(qr);
-
-      // Actualizar en DB y enviar por socket
       await updateQR("qr", id_externo, qrCodeData);
-
-      // Actualizar en DB
       await updateConnectionStatus(id_externo, "qr", null, qrCodeData);
 
       WhatsAppSessions[id_externo] = {
@@ -1022,16 +1280,13 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
       };
     });
 
-    // Autenticación exitosa
     client.on("authenticated", async () => {
       console.log(`✅ Autenticado: ${id_externo}`);
       await updateUserRecord(id_externo, { estado: "autenticado" });
     });
 
-    // Listo para usar
     client.on("ready", async () => {
       console.log(`✔️ Cliente listo: ${id_externo}`);
-
       await updateUserRecord(id_externo, { estado: "conectado" });
       await updateQR("connected", id_externo);
 
@@ -1041,15 +1296,18 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
         qrGeneratedAt: null,
         qrCode: null,
       };
+
+      // NUEVO: Limpiar memoria después de conectar
+      if (global.gc) {
+        global.gc();
+        console.log(`🧹 Garbage collection ejecutado para ${id_externo}`);
+      }
     });
 
-    // Desconexión
     client.on("disconnected", async (reason) => {
       console.log(`❌ Desconectado ${id_externo}:`, reason);
-
       await updateConnectionStatus(id_externo, "close", reason, null);
 
-      // Limpiar sesión de memoria (sin destruir el cliente, ya está desconectado)
       if (WhatsAppSessions[id_externo]) {
         delete WhatsAppSessions[id_externo];
         console.log(`✅ Sesión eliminada de memoria: ${id_externo}`);
@@ -1060,21 +1318,17 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
         reason !== "Max qrcode retries reached" &&
         reason !== "NAVIGATION";
 
-      // Reconectar si no fue logout
       if (shouldReconnect) {
-        // Casos de desconexión temporal (internet, conflicto, etc.)
         console.log(`🔄 Reconectando en 5s para: ${id_externo}`);
         setTimeout(() => {
           connectToWhatsApp(id_externo, receiveMessages);
         }, 5000);
       } else {
         console.log(`🗑️ Logout detectado, eliminando datos: ${id_externo}`);
-
         try {
           await removeRegistro(id_externo);
           await cleanupSessionFiles(id_externo);
 
-          // Limpiar socket
           if (global.userSockets && global.userSockets[id_externo]) {
             const socketId = global.userSockets[id_externo];
             const userSocket = global.io?.sockets.sockets.get(socketId);
@@ -1093,52 +1347,37 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
       }
     });
 
-    // Error de autenticación
     client.on("auth_failure", async (msg) => {
       console.error(`❌ Error de autenticación ${id_externo}:`, msg);
       await updateUserRecord(id_externo, {
         estado: "error_autenticacion",
         error_msg: msg,
       });
-
       await removeRegistro(id_externo);
     });
 
     // ============================================
-    // RECEPCIÓN DE MENSAJES (NUEVA FUNCIONALIDAD)
+    // RECEPCIÓN DE MENSAJES CON OPTIMIZACIONES
     // ============================================
     if (receiveMessages) {
       client.on("message", async (message) => {
         await handleIncomingMessage(message, id_externo, client);
       });
 
-      // Escuchar cambios en mensajes (ediciones, eliminaciones)
       client.on("message_revoke_everyone", async (revokedMsg) => {
-        console.log(
-          `🗑️ Mensaje eliminado por el remitente: ${revokedMsg.id._serialized}`
-        );
-      });
-
-      // Escuchar cuando alguien está escribiendo
-      client.on("message_create", async (message) => {
-        // Este evento se dispara para TODOS los mensajes, incluso los que envías tú
-        // Útil si necesitas procesar también tus mensajes enviados
-        if (message.fromMe) {
-          console.log(`📤 Mensaje enviado por ti: ${message.body}`);
-        }
+        console.log(`🗑️ Mensaje eliminado: ${revokedMsg.id._serialized}`);
       });
 
       console.log(`📩 Recepción de mensajes activada para: ${id_externo}`);
     }
 
-    // Inicializar cliente
-    // await client.initialize();
+    // Inicializar con timeout
     await Promise.race([
       client.initialize(),
       new Promise((_, reject) =>
         setTimeout(
           () => reject(new Error("Timeout inicializando cliente")),
-          120000
+          90000
         )
       ),
     ]);
@@ -1345,33 +1584,38 @@ async function logoutWhatsApp(id_externo) {
 
     if (!session || !session.client) {
       console.log(`⚠️ No hay sesión activa para: ${id_externo}`);
-      return { success: false, message: "No hay sesión activa" };
+      // Limpiar directamente si no hay sesión
+      await removeRegistro(id_externo);
+      return {
+        success: true,
+        message: "No había sesión activa, limpieza completada",
+      };
     }
 
     const client = session.client;
 
     try {
-      // Verificar si el cliente está activo
       const state = await client.getState();
       console.log(`Estado actual del cliente: ${state}`);
 
       if (state === "CONNECTED") {
-        // Hacer logout (esto disparará el evento 'disconnected' con reason 'LOGOUT')
-        await client.logout();
-        console.log(`✅ Logout exitoso para: ${id_externo}`);
+        // IMPORTANTE: Primero destruir, LUEGO limpiar archivos
+        await client.destroy(); // Esto cierra la conexión de forma segura
+        console.log(`✅ Cliente destruido para: ${id_externo}`);
 
-        // El resto lo manejará el evento 'disconnected'
+        // Ahora sí podemos limpiar todo
+        await removeRegistro(id_externo);
+
         return { success: true, message: "Sesión cerrada correctamente" };
       } else {
+        // Si no está conectado, limpiar manualmente
         console.log(`⚠️ Cliente no está conectado: ${state}`);
-        // Limpiar manualmente si no está conectado
         await removeRegistro(id_externo);
         return { success: true, message: "Sesión limpiada" };
       }
     } catch (error) {
       console.error(`Error durante logout de ${id_externo}:`, error);
-
-      // Si hay error, intentar limpiar de todas formas
+      // Si hay error, limpiar de todas formas
       await removeRegistro(id_externo);
       return { success: false, message: error.message };
     }
