@@ -1244,7 +1244,7 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
         timeout: 60000,
       },
 
-      qrMaxRetries: 5,
+      // qrMaxRetries: 5,  // Numero de veces que genera el qr
       authTimeoutMs: 0,
       qrTimeoutMs: 0,
       restartOnAuthFail: true,
@@ -1326,8 +1326,8 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
       } else {
         console.log(`🗑️ Logout detectado, eliminando datos: ${id_externo}`);
         try {
-          await removeRegistro(id_externo);
-          await cleanupSessionFiles(id_externo);
+          // await removeRegistro(id_externo);
+          // await cleanupSessionFiles(id_externo);
 
           if (global.userSockets && global.userSockets[id_externo]) {
             const socketId = global.userSockets[id_externo];
@@ -1585,7 +1585,7 @@ async function logoutWhatsApp(id_externo) {
     if (!session || !session.client) {
       console.log(`⚠️ No hay sesión activa para: ${id_externo}`);
       // Limpiar directamente si no hay sesión
-      await removeRegistro(id_externo);
+      // await removeRegistro(id_externo);
       return {
         success: true,
         message: "No había sesión activa, limpieza completada",
@@ -1604,19 +1604,19 @@ async function logoutWhatsApp(id_externo) {
         console.log(`✅ Cliente destruido para: ${id_externo}`);
 
         // Ahora sí podemos limpiar todo
-        await removeRegistro(id_externo);
+        // await removeRegistro(id_externo);
 
         return { success: true, message: "Sesión cerrada correctamente" };
       } else {
         // Si no está conectado, limpiar manualmente
         console.log(`⚠️ Cliente no está conectado: ${state}`);
-        await removeRegistro(id_externo);
+        // await removeRegistro(id_externo);
         return { success: true, message: "Sesión limpiada" };
       }
     } catch (error) {
       console.error(`Error durante logout de ${id_externo}:`, error);
       // Si hay error, limpiar de todas formas
-      await removeRegistro(id_externo);
+      // await removeRegistro(id_externo);
       return { success: false, message: error.message };
     }
   } catch (error) {
