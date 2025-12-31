@@ -14,58 +14,65 @@ const WhatsAppSessions = {};
  * Conectar a WhatsApp
  */
 exports.connectToWhatsApp = async (id_externo, receiveMessages) => {
+    let client = null;
+
     try {
         console.log(`🔄 Iniciando conexión para: ${id_externo}`);
 
         // ✅ LIMPIAR SESIÓN ANTERIOR SI EXISTE
         if (WhatsAppSessions[id_externo]?.client) {
             const existingClient = WhatsAppSessions[id_externo].client;
-
             console.log(`🧹 Detectada sesión anterior para ${id_externo}, limpiando...`);
 
             try {
-                // Intentar destruir el cliente anterior
-                if (typeof existingClient.destroy === 'function') {
+                if (existingClient && typeof existingClient.removeAllListeners === 'function') {
+                    existingClient.removeAllListeners();
+                }
+                if (existingClient && typeof existingClient.destroy === 'function') {
                     await existingClient.destroy();
-                    console.log(`✅ Cliente anterior destruido para ${id_externo}`);
                 }
             } catch (destroyError) {
                 console.warn(`⚠️ Error destruyendo cliente anterior:`, destroyError.message);
             }
 
-            // Limpiar de memoria
             delete WhatsAppSessions[id_externo];
 
-            // ✅ CRÍTICO: Esperar antes de crear nueva sesión
-            console.log(`⏳ Esperando 3s antes de crear nueva sesión para ${id_externo}...`);
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            // ⭐ Esperar más tiempo en Docker
+            const waitTime = process.env.DOCKER_ENV === 'true' ? 8000 : 3000;
+            console.log(`⏳ Esperando ${waitTime / 1000}s antes de crear nueva sesión...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
         }
 
         // Crear nueva sesión
         const config = whatsAppConfig.getWhatsAppConfig(id_externo);
-        const client = new Client({
+        client = new Client({
             authStrategy: new LocalAuth({ clientId: id_externo }),
             ...config
         });
 
+        // ⭐ Guardar ANTES de inicializar
         WhatsAppSessions[id_externo] = {
             client,
-            status: 'connecting'
+            status: 'connecting',
+            retries: 0
         };
+        console.log(`💾 Sesión guardada para ${id_externo}`);
 
         // Configurar eventos del cliente
         setupClientEvents(client, id_externo, receiveMessages);
 
-        // Inicializar cliente con timeout
+        // ⭐ Timeout más largo en Docker
+        const timeout = process.env.DOCKER_ENV === 'true' ? 180000 : 90000;
+        console.log(`🚀 Inicializando cliente (timeout: ${timeout / 1000}s)...`);
+
         await Promise.race([
             client.initialize(),
             new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Timeout inicializando cliente')), 90000)
+                setTimeout(() => reject(new Error(`Timeout inicializando cliente (${timeout / 1000}s)`)), timeout)
             ),
         ]);
 
         console.log(`✅ Cliente inicializado correctamente para ${id_externo}`);
-
         WhatsAppSessions[id_externo].status = 'initialized';
 
         return client;
@@ -73,21 +80,49 @@ exports.connectToWhatsApp = async (id_externo, receiveMessages) => {
     } catch (error) {
         console.error(`❌ Error conectando WhatsApp para ${id_externo}:`, error.message);
 
-        // ✅ LIMPIAR EN CASO DE ERROR
-        if (WhatsAppSessions[id_externo]) {
+        // ⭐ Si es error de protocolo, eliminar sesión corrupta
+        if (error.message.includes('Protocol error') ||
+            error.message.includes('Session closed')) {
+
+            console.log(`🗑️ Eliminando sesión corrupta para ${id_externo}`);
+
             try {
-                if (WhatsAppSessions[id_externo].client) {
-                    await WhatsAppSessions[id_externo].client.destroy();
+                const fs = require('fs');
+                const path = require('path');
+                const sessionPath = path.join('.wwebjs_auth', `session-${id_externo}`);
+
+                if (fs.existsSync(sessionPath)) {
+                    fs.rmSync(sessionPath, { recursive: true, force: true });
+                    console.log(`✅ Sesión corrupta eliminada: ${sessionPath}`);
+                }
+            } catch (fsError) {
+                console.warn(`⚠️ Error eliminando sesión:`, fsError.message);
+            }
+        }
+
+        // ✅ Limpiar cliente
+        if (client) {
+            try {
+                if (typeof client.removeAllListeners === 'function') {
+                    client.removeAllListeners();
+                }
+                if (typeof client.destroy === 'function') {
+                    await client.destroy();
                 }
             } catch (cleanupError) {
-                console.warn(`⚠️ Error limpiando después de fallo:`, cleanupError.message);
+                console.warn(`⚠️ Error limpiando cliente:`, cleanupError.message);
             }
+        }
+
+        // ✅ Limpiar de memoria
+        if (WhatsAppSessions[id_externo]) {
             delete WhatsAppSessions[id_externo];
         }
 
         throw error;
     }
 };
+
 
 /**
  * Configurar eventos del cliente WhatsApp
