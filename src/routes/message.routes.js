@@ -13,7 +13,7 @@ router.post(
 
 // Enviar mensaje multimedia
 router.post(
-    "/:id_externo/media",
+    "/media/:id_externo",
     validateIdExterno,
     messageController.sendMediaMessage
 );

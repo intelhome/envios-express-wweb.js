@@ -51,13 +51,25 @@ async function sendMediaMessage(req, res, next) {
         const { id_externo } = req.params;
         const { number, tempMessage, link, type, latitud, longitud, file } = req.body;
 
-        // TODO: Implementar según tipo (image, video, audio, document, location)
-        // Por ahora, respuesta básica
+        // Validación mínima
+        if (!number) {
+            return res.status(400).json({
+                status: false,
+                response: "El número es requerido"
+            });
+        }
 
-        res.status(200).json({
+        // Delegar toda la lógica al service
+        const result = await messageService.sendMediaMessage(
+            id_externo,
+            req.body  // Pasa todo el body
+        );
+
+        return res.status(200).json({
             status: true,
-            response: "Funcionalidad en desarrollo",
+            response: result,
         });
+
     } catch (error) {
         res.status(500).json({
             status: false,

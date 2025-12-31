@@ -31,19 +31,19 @@ exports.sendMessage = async (id_externo, messageData) => {
 
     // Formatear número
     const formattedNumber = formatPhoneNumber(number);
-    
+
     // ✅ CAMBIO CLAVE: Usar getNumberId en lugar de isRegisteredUser + chatId manual
     let chatId;
     try {
         const numberId = await client.getNumberId(formattedNumber);
-        
+
         if (!numberId) {
             throw new Error('El número no está registrado en WhatsApp');
         }
-        
+
         chatId = numberId._serialized;
         console.log('✅ ChatId verificado:', chatId);
-        
+
     } catch (error) {
         console.error('❌ Error verificando número:', error.message);
         throw new Error(`El número ${formattedNumber} no está registrado en WhatsApp`);
@@ -70,16 +70,16 @@ exports.sendMessage = async (id_externo, messageData) => {
         }
     } catch (sendError) {
         console.error('❌ Error al enviar mensaje:', sendError);
-        
+
         // Manejo de errores específicos
         if (sendError.message.includes('Evaluation failed')) {
             throw new Error('Error al procesar el mensaje. El número puede no ser válido');
         }
-        
+
         if (sendError.message.includes('Phone not connected')) {
             throw new Error('Teléfono desconectado. Reconecta el dispositivo');
         }
-        
+
         throw new Error(`Error enviando mensaje: ${sendError.message}`);
     }
 
@@ -133,13 +133,16 @@ exports.sendMediaMessage = async (id_externo, mediaData) => {
             result = await client.sendMessage(chatId, imageMedia, {
                 caption: tempMessage || ''
             });
+            console.log(`🖼️ Imagen enviada a ${formattedNumber}`);
             break;
 
         case 'video':
             const videoMedia = await MessageMedia.fromUrl(link);
             result = await client.sendMessage(chatId, videoMedia, {
-                caption: tempMessage || ''
+                caption: tempMessage || '',
+                sendMediaAsDocument: false
             });
+            console.log(`🎥 Video enviado a ${formattedNumber}`);
             break;
 
         case 'audio':
@@ -147,6 +150,13 @@ exports.sendMediaMessage = async (id_externo, mediaData) => {
             result = await client.sendMessage(chatId, audioMedia, {
                 sendAudioAsVoice: true
             });
+            console.log(`🎵 Audio enviado a ${formattedNumber}`);
+            break;
+
+        case 'location':
+            const location = new Location(latitud, longitud, tempMessage || '');
+            result = await client.sendMessage(chatId, location);
+            console.log(`📍 Ubicación enviada a ${formattedNumber}`);
             break;
 
         case 'document':
@@ -158,14 +168,44 @@ exports.sendMediaMessage = async (id_externo, mediaData) => {
                 caption: tempMessage || '',
                 sendMediaAsDocument: true
             });
+            console.log(`📄 Documento enviado a ${formattedNumber}`);
+            break;
+
+        case 'documentBase64':
+            const pdfMedia = new MessageMedia(
+                'application/pdf',
+                link, // Base64 string
+                `${file || 'documento'}.pdf`
+            );
+            result = await client.sendMessage(chatId, pdfMedia, {
+                caption: tempMessage || '',
+                sendMediaAsDocument: true
+            });
+            console.log(`📎 PDF Base64 enviado a ${formattedNumber}`);
             break;
 
         default:
             result = await client.sendMessage(chatId, tempMessage);
+            console.log(`💬 Mensaje de texto enviado a ${formattedNumber}`);
+            break;
     }
 
     const info = client.info;
     const fecha = moment().tz('America/Guayaquil').format('YYYY-MM-DD HH:mm:ss');
+
+    // Log del mensaje enviado
+    console.log({
+        De: `cliente-${id_externo}`,
+        Para: formattedNumber,
+        EnviadoPor: info.wid.user,
+        Message: tempMessage,
+        Tipo: type,
+        Fecha: fecha,
+        MessageId: result.id._serialized,
+    });
+
+    // Esperar un momento para que se procese el envío
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     return {
         messageId: result.id._serialized,
