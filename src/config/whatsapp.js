@@ -30,13 +30,19 @@ const whatsappConfig = {
             "--mute-audio",
             "--no-first-run",
             "--no-default-browser-check",
+            // opcionales
+            "--disable-web-security",
+            "--disable-features=IsolateOrigins,site-per-process",
+            "--disable-site-isolation-trials",
+            "--disable-blink-features=AutomationControlled",
+            "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         ],
         defaultViewport: {
             width: 800,
             height: 600,
             deviceScaleFactor: 1,
         },
-        timeout: 60000,
+        timeout: 9000,
     },
     authTimeoutMs: 0,
     qrMaxRetries: 5,

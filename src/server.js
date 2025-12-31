@@ -35,7 +35,6 @@ async function startServer() {
         // 1. Conectar a MongoDB
         await connectToMongoDB();
         // await connectMongoose();
-        console.log("✅ Conectado a MongoDB");
 
         // 2. Configurar Express
         const app = setupExpressApp();

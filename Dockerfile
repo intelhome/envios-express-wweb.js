@@ -62,5 +62,5 @@ COPY . .
 RUN mkdir -p .wwebjs_auth .wwebjs_cache logs && \
     chmod -R 777 .wwebjs_auth .wwebjs_cache logs
 
-EXPOSE 4121
-CMD ["node", "index.js"]
+EXPOSE 4010
+CMD ["npm", "start"]

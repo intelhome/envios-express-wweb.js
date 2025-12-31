@@ -1,7 +1,7 @@
 services:
   whatsapp-api:
     build: .
-    container_name: envios-express-container
+    container_name: envios-express-container-whatsappweb-js
     restart: always
     ports:
       - "4010:4010"
@@ -12,6 +12,8 @@ services:
       - ./logs:/usr/src/app/logs
     environment:
       - NODE_ENV=production
+      - DOCKER_ENV=true
+    shm_size: "2gb"
     networks:
       - whatsapp-network
 
