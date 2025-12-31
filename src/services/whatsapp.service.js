@@ -123,7 +123,6 @@ exports.connectToWhatsApp = async (id_externo, receiveMessages) => {
     }
 };
 
-
 /**
  * Configurar eventos del cliente WhatsApp
  */

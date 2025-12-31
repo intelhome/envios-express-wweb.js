@@ -1,66 +1,71 @@
-FROM node:18-slim
+FROM node:18-bullseye-slim
 
-# -------------------------------------------------------
-# INSTALAR GOOGLE CHROME STABLE (más estable que Chromium)
-# -------------------------------------------------------
-RUN apt-get update && apt-get install -y \
-    wget gnupg ca-certificates --no-install-recommends && \
-    wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - && \
-    echo "deb [arch=amd64] https://dl.google.com/linux/chrome/deb/ stable main" \
-    > /etc/apt/sources.list.d/google-chrome.list && \
-    apt-get update && apt-get install -y \
-    google-chrome-stable \
-    --no-install-recommends && \
-    rm -rf /var/lib/apt/lists/*
+# Variables de entorno para Puppeteer
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 
-# LIBRERÍAS NECESARIAS PARA PUPPETEER
+# Instalar dependencias base
 RUN apt-get update && apt-get install -y \
-    fonts-ipafont-gothic \
-    fonts-wqy-zenhei \
-    fonts-thai-tlwg \
-    fonts-kacst \
-    fonts-freefont-ttf \
-    libnss3 \
-    libatk1.0-0 \
+    wget \
+    gnupg \
+    ca-certificates \
+    --no-install-recommends
+
+# Instalar Google Chrome
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list' \
+    && apt-get update \
+    && apt-get install -y google-chrome-stable \
+    --no-install-recommends
+
+# Instalar librerías necesarias
+RUN apt-get install -y \
+    fonts-liberation \
+    libappindicator3-1 \
+    libasound2 \
     libatk-bridge2.0-0 \
-    libx11-6 \
+    libatk1.0-0 \
+    libcups2 \
+    libdbus-1-3 \
+    libdrm2 \
+    libgbm1 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
     libx11-xcb1 \
     libxcomposite1 \
     libxdamage1 \
-    libxfixes3 \
     libxrandr2 \
-    libxrender1 \
-    libxext6 \
-    libxi6 \
+    libxss1 \
     libxtst6 \
-    libglib2.0-0 \
-    libdrm2 \
-    libgbm1 \
-    libpango-1.0-0 \
-    libpangocairo-1.0-0 \
-    libcairo2 \
-    libcups2 \
-    libasound2 \
-    libxkbcommon0 \
-    --no-install-recommends && \
-    rm -rf /var/lib/apt/lists/*
+    xdg-utils \
+    --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
 
-# -------------------------------------------------------
-# EVITAR DESCARGA DE CHROMIUM (usaremos Google Chrome)
-# -------------------------------------------------------
-ENV PUPPETEER_EXECUTABLE_PATH="/usr/bin/google-chrome-stable"
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-
-# -------------------------------------------------------
-# ARCHIVOS DE LA APP
-# -------------------------------------------------------
 WORKDIR /usr/src/app
+
+# Copiar package files
 COPY package*.json ./
-RUN npm install --force
+
+# Instalar dependencias
+RUN npm ci --only=production
+
+# Copiar código fuente
 COPY . .
 
+# ⭐ APLICAR PATCH CRÍTICO
+RUN node patch-whatsapp.js
+
+# Crear directorios
 RUN mkdir -p .wwebjs_auth .wwebjs_cache logs && \
     chmod -R 777 .wwebjs_auth .wwebjs_cache logs
 
+# Usuario no-root
+RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
+    && chown -R pptruser:pptruser /usr/src/app
+
+USER pptruser
+
 EXPOSE 4010
+
 CMD ["npm", "start"]
