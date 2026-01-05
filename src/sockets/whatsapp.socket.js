@@ -1,13 +1,9 @@
-const socketService = require('../services/socket.service');
 const userService = require('../services/user.service');
 
 // Almacenar sockets de usuarios (también lo puedes guardar en global si prefieres)
 const userSockets = {};
 
 const initializeSocketEvents = (io) => {
-    // Hacer io accesible globalmente para el servicio
-    socketService.setIO(io);
-
     io.on('connection', (socket) => {
         console.log('📡 Socket conectado:', socket.id);
 

@@ -96,11 +96,8 @@ const deleteUser = async (req, res, next) => {
         // Cerrar sesión primero
         await whatsappService.logoutWhatsApp(id_externo);
 
-        // Eliminar de DB
-        await userService.deleteUser(id_externo);
-
         // Limpiar sesión completa
-        await sessionService.removeSessionCompletely(id_externo);
+        await sessionService.removeSession(id_externo);
 
         res.json({
             result: true,

@@ -58,7 +58,7 @@ const getWhatsAppConfig = (id_externo) => {
     return {
         authStrategy: new (require('whatsapp-web.js').LocalAuth)({
             clientId: id_externo,
-            dataPath: path.join(__dirname, '..', '.wwebjs_auth', 'sessions'),
+            dataPath: path.join(__dirname, '../../', '.wwebjs_auth', 'sessions'),
         }),
         puppeteer: whatsappConfig.puppeteer,
         authTimeoutMs: whatsappConfig.authTimeoutMs,

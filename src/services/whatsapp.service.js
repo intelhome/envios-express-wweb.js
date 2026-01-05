@@ -302,21 +302,41 @@ exports.logoutWhatsApp = async (id_externo) => {
 
         if (!session?.client) {
             console.log(`⚠️ No hay sesión activa: ${id_externo}`);
+            delete WhatsAppSessions[id_externo];
             return { success: true, message: 'No había sesión activa' };
         }
 
         const client = session.client;
-        const state = await client.getState().catch(() => null);
 
-        if (state === 'CONNECTED') {
+        try {
+            const state = await client.getState().catch(() => null);
+
+            if (state === 'CONNECTED') {
+                // Hacer logout primero
+                await client.logout().catch(() => { });
+                console.log(`📤 Logout realizado: ${id_externo}`);
+            }
+
+            // Destruir el cliente
             await client.destroy();
             console.log(`✅ Cliente destruido: ${id_externo}`);
+
+            // ⏱️ ESPERAR a que Chrome libere los archivos
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+        } catch (error) {
+            console.error(`⚠️ Error al cerrar cliente: ${error.message}`);
         }
+
+        // Eliminar de memoria
+        delete WhatsAppSessions[id_externo];
+        console.log(`🗑️ Sesión eliminada de memoria: ${id_externo}`);
 
         return { success: true, message: 'Sesión cerrada correctamente' };
 
     } catch (error) {
         console.error(`❌ Error en logout ${id_externo}:`, error);
+        delete WhatsAppSessions[id_externo];
         return { success: false, message: error.message };
     }
 };
@@ -333,6 +353,15 @@ exports.getClient = (id_externo) => {
  */
 exports.getSession = (id_externo) => {
     return WhatsAppSessions[id_externo];
+};
+
+exports.deleteSessionFromMemory = (id_externo) => {
+    if (WhatsAppSessions[id_externo]) {
+        delete WhatsAppSessions[id_externo];
+        console.log(`🗑️ Sesión eliminada de memoria: ${id_externo}`);
+        return true;
+    }
+    return false;
 };
 
 /**

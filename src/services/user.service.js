@@ -1,6 +1,6 @@
 const { getCollection } = require('../config/database');
 
-const COLLECTION_NAME = 'registros_whatsapp';
+let COLLECTION_NAME = process.env.COLLECTION_SESSIONS_NAME || "registros_whatsapp";
 
 /**
  * Crear un nuevo usuario

@@ -1,155 +1,481 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
   <head>
-    <title>Api WhatsApp</title>
-    <meta name="description" content="WhatsApp Api otomatis." />
     <meta charset="UTF-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta
-      name="viewport"
-      content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes"
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WhatsApp API QR</title>
     <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
       body {
-        background: rgb(200, 220, 224);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
       }
-      .form {
-        font-family: Helvetica, sans-serif;
-        max-width: 400px;
-        margin: 100px auto;
-        text-align: center;
-        padding: 16px;
-        background: #ffffff;
-      }
-      .form h1 {
-        background: #03773f;
-        padding: 20px 0;
-        font-weight: 300;
-        text-align: center;
-        color: #fff;
-        margin: -16px -16px 16px -16px;
-        font-size: 25px;
-      }
-      .form input[type="text"],
-      .form input[type="url"] {
-        box-sizing: border-box;
+
+      .container {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 24px;
+        padding: 40px;
+        max-width: 450px;
         width: 100%;
-        background: #fff;
-        margin-bottom: 4%;
-        border: 1px solid #ccc;
-        padding: 4%;
-        font-size: 17px;
-        color: rgb(9, 61, 125);
-      }
-      .form input[type="text"]:focus,
-      .form input[type="url"]:focus {
-        box-shadow: 0 0 5px #5868bf;
-        padding: 4%;
-        border: 1px solid #5868bf;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        animation: slideIn 0.5s ease-out;
       }
 
-      .form button {
-        box-sizing: border-box;
-        -webkit-box-sizing: border-box;
-        -moz-box-sizing: border-box;
-        width: 180px;
-        margin: 0 auto;
-        padding: 3%;
-        background: #0853b6;
-        border: none;
-        border-radius: 3px;
-        font-size: 17px;
-        border-top-style: none;
-        border-right-style: none;
-        border-left-style: none;
-        color: #fff;
-        cursor: pointer;
-      }
-      .form button:hover {
-        background: rgba(88, 104, 191, 0.5);
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-30px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
 
-      .qrcode {
-        padding: 16px;
+      .header {
+        text-align: center;
         margin-bottom: 30px;
       }
-      .qrcode img {
+
+      .whatsapp-icon {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto 20px;
+        background: linear-gradient(135deg, #25d366 0%, #128c7e 100%);
+        border-radius: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 40px;
+        box-shadow: 0 10px 30px rgba(37, 211, 102, 0.3);
+        transition: transform 0.3s ease;
+      }
+
+      .whatsapp-icon.connected {
+        animation: successPulse 0.6s ease;
+      }
+
+      @keyframes successPulse {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.1);
+        }
+      }
+
+      h1 {
+        color: #2d3748;
+        font-size: 28px;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+
+      .subtitle {
+        color: #718096;
+        font-size: 14px;
+        font-weight: 400;
+      }
+
+      .qrcode-container {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 24px;
+        margin: 24px 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 350px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .qrcode-container::before {
+        content: "";
+        position: absolute;
+        inset: -2px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        border-radius: 16px;
+        z-index: -1;
+      }
+
+      #qrcode {
+        max-width: 300px;
+        width: 100%;
+        height: auto;
+        border-radius: 12px;
+        animation: fadeIn 0.5s ease-in;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      .loading {
+        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      .instruction-card {
+        background: linear-gradient(135deg, #f6f8fb 0%, #e9ecef 100%);
+        border-radius: 12px;
+        padding: 20px;
+        margin-top: 24px;
+        transition: all 0.3s ease;
+      }
+
+      .instruction-card.hidden {
+        display: none;
+      }
+
+      .instruction-card ul {
+        list-style: none;
+        color: #4a5568;
+        font-size: 14px;
+        line-height: 1.8;
+      }
+
+      .instruction-card li {
+        padding: 8px 0;
+        display: flex;
+        align-items: start;
+      }
+
+      .instruction-card li::before {
+        content: "✓";
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        background: linear-gradient(135deg, #25d366 0%, #128c7e 100%);
+        color: white;
+        border-radius: 50%;
+        text-align: center;
+        line-height: 20px;
+        font-size: 12px;
+        font-weight: bold;
+        margin-right: 12px;
+        flex-shrink: 0;
+      }
+
+      #iduser {
+        color: #2d3748;
+        font-weight: 700;
+        font-size: 16px;
+        text-align: center;
+        margin-top: 16px;
+        padding: 12px;
+        background: linear-gradient(
+          135deg,
+          rgba(102, 126, 234, 0.1) 0%,
+          rgba(118, 75, 162, 0.1) 100%
+        );
+        border-radius: 8px;
+        border: 2px solid rgba(102, 126, 234, 0.2);
+      }
+
+      .status-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 20px;
+        background: rgba(37, 211, 102, 0.1);
+        border-radius: 20px;
+        font-size: 13px;
+        color: #128c7e;
+        font-weight: 600;
         margin: 0 auto;
-        box-shadow: 0 0 10px rgba(67, 67, 68, 0.25);
-        padding: 4px;
+        justify-content: center;
+        transition: all 0.3s ease;
+        border: 2px solid rgba(37, 211, 102, 0.2);
+      }
+
+      .status-indicator.waiting {
+        background: rgba(251, 191, 36, 0.1);
+        color: #d97706;
+        border-color: rgba(251, 191, 36, 0.3);
+      }
+
+      .status-indicator.connected {
+        background: rgba(37, 211, 102, 0.15);
+        color: #128c7e;
+        border-color: rgba(37, 211, 102, 0.4);
+      }
+
+      .status-indicator.disconnected {
+        background: rgba(239, 68, 68, 0.1);
+        color: #dc2626;
+        border-color: rgba(239, 68, 68, 0.3);
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        background: #25d366;
+        border-radius: 50%;
+        animation: blink 1.5s ease-in-out infinite;
+      }
+
+      .status-dot.waiting {
+        background: #d97706;
+      }
+
+      .status-dot.connected {
+        background: #25d366;
+        animation: none;
+      }
+
+      .status-dot.disconnected {
+        background: #dc2626;
+        animation: none;
+      }
+
+      @keyframes blink {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.3;
+        }
+      }
+
+      .success-card {
+        background: linear-gradient(
+          135deg,
+          rgba(37, 211, 102, 0.1) 0%,
+          rgba(18, 140, 126, 0.1) 100%
+        );
+        border-radius: 12px;
+        padding: 24px;
+        margin-top: 24px;
+        text-align: center;
+        border: 2px solid rgba(37, 211, 102, 0.3);
+        display: none;
+      }
+
+      .success-card.show {
+        display: block;
+        animation: slideIn 0.5s ease-out;
+      }
+
+      .success-card .icon {
+        font-size: 48px;
+        margin-bottom: 12px;
+      }
+
+      .success-card h3 {
+        color: #128c7e;
+        font-size: 20px;
+        margin-bottom: 8px;
+      }
+
+      .success-card p {
+        color: #4a5568;
+        font-size: 14px;
+      }
+
+      @media (max-width: 480px) {
+        .container {
+          padding: 24px;
+        }
+
+        h1 {
+          font-size: 24px;
+        }
+
+        .whatsapp-icon {
+          width: 60px;
+          height: 60px;
+          font-size: 32px;
+        }
       }
     </style>
   </head>
   <body>
-    <div class="form">
-      <h1>WhatsApp API QR</h1>
-      <div id="qrcode-container">
+    <div class="container">
+      <div class="header">
+        <div class="whatsapp-icon" id="whatsappIcon">📱</div>
+        <h1>WhatsApp API</h1>
+        <p class="subtitle">Conecta tu cuenta de WhatsApp</p>
+      </div>
+
+      <div class="status-indicator waiting" id="statusIndicator">
+        <span class="status-dot waiting" id="statusDot"></span>
+        <span id="statusText">Esperando escaneo</span>
+      </div>
+
+      <div class="qrcode-container" id="qrcodeContainer">
         <img
           src="./assets/loader.gif"
-          alt="loading"
+          alt="Cargando código QR"
           id="qrcode"
-          style="width: 350px"
+          class="loading"
         />
       </div>
-      <div class="card">
-        <div class="body">
-          <span>
-            <li id="qr-instruction">
-              Escanea el siguiente código QR con tu aplicación de WhatsApp
-            </li>
-            <h5 id="iduser"></h5>
-          </span>
-        </div>
+
+      <div class="instruction-card" id="instructionCard">
+        <ul>
+          <li>Abre WhatsApp en tu teléfono</li>
+          <li>
+            Toca Menú o Configuración y selecciona "Dispositivos vinculados"
+          </li>
+          <li>
+            Apunta tu teléfono hacia esta pantalla para escanear el código
+          </li>
+        </ul>
+      </div>
+
+      <div class="success-card" id="successCard">
+        <div class="icon">✅</div>
+        <h3>¡Conectado exitosamente!</h3>
+        <p>Tu cuenta de WhatsApp está vinculada</p>
+        <div id="iduser"></div>
       </div>
     </div>
+
     <script
       src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.1.3/socket.io.js"
       crossorigin="anonymous"
     ></script>
     <script>
+      // Elementos del DOM
       const qrcode = document.getElementById("qrcode");
+      const qrcodeContainer = document.getElementById("qrcodeContainer");
       const iduser = document.getElementById("iduser");
-      const qrInstruction = document.getElementById("qr-instruction");
+      const instructionCard = document.getElementById("instructionCard");
+      const successCard = document.getElementById("successCard");
+      const statusIndicator = document.getElementById("statusIndicator");
+      const statusDot = document.getElementById("statusDot");
+      const statusText = document.getElementById("statusText");
+      const whatsappIcon = document.getElementById("whatsappIcon");
 
       // Obtener el id_externo de la URL
       const urlParams = new URLSearchParams(window.location.search);
       const id_externo = urlParams.get("id_externo");
 
-      const socket = io(); // Conexion al socket
+      // Conexión al socket
+      const socket = io();
 
       if (id_externo) {
         socket.emit("joinSession", id_externo);
+        console.log(`📱 Uniéndose a sesión: ${id_externo}`);
+      } else {
+        updateStatus("disconnected", "ID de usuario no encontrado");
       }
 
+      // Función para actualizar el estado visual
+      function updateStatus(status, text) {
+        // Actualizar clases del indicador
+        statusIndicator.className = `status-indicator ${status}`;
+        statusDot.className = `status-dot ${status}`;
+        statusText.textContent = text;
+
+        // Actualizar según el estado
+        switch (status) {
+          case "waiting":
+            instructionCard.classList.remove("hidden");
+            successCard.classList.remove("show");
+            qrcodeContainer.style.display = "flex";
+            break;
+          case "connected":
+            instructionCard.classList.add("hidden");
+            successCard.classList.add("show");
+            qrcodeContainer.style.display = "none";
+            whatsappIcon.classList.add("connected");
+            setTimeout(() => whatsappIcon.classList.remove("connected"), 600);
+            break;
+          case "disconnected":
+            instructionCard.classList.remove("hidden");
+            successCard.classList.remove("show");
+            qrcodeContainer.style.display = "flex";
+            qrcode.setAttribute("src", "./assets/loader.gif");
+            qrcode.classList.add("loading");
+            iduser.innerHTML = "";
+            break;
+        }
+      }
+
+      // Evento: Recibir QR
       socket.on("qr", (url) => {
+        console.log("📸 QR recibido");
         qrcode.setAttribute("src", url);
-        qrInstruction.style.display = "list-item"; // Mostrar instrucción
+        qrcode.classList.remove("loading");
+        updateStatus("waiting", "Escanea el código QR");
       });
 
+      // Evento: Actualizar estado del QR
       socket.on("qrstatus", (src) => {
-        console.log(`Estado QR actualizado: ${src}`);
+        console.log(`📊 Estado QR actualizado: ${src}`);
         qrcode.setAttribute("src", src);
-      });
 
-      socket.on("user", (user) => {
-        // Mostrar nombre del usuario
-        iduser.innerHTML = user.nombre || user;
-      });
-
-      socket.on("connected", (isConnected) => {
-        if (isConnected) {
-          console.log("✅ Usuario conectado");
-          // Ocultar la instrucción de escanear QR
-          qrInstruction.style.display = "none";
+        // Si es el loader, mostrar estado de espera
+        if (src.includes("loader.gif")) {
+          qrcode.classList.add("loading");
+          updateStatus("waiting", "Generando código QR...");
         }
       });
 
+      // Evento: Recibir datos del usuario
+      socket.on("user", (user) => {
+        console.log("👤 Usuario recibido:", user);
+        const userName = user.nombre || user.name || user;
+        iduser.innerHTML = `<strong>Usuario:</strong> ${userName}`;
+      });
+
+      // Evento: Usuario conectado
+      socket.on("connected", (isConnected) => {
+        if (isConnected) {
+          console.log("✅ Usuario conectado exitosamente");
+          updateStatus("connected", "Conectado");
+        }
+      });
+
+      // Evento: Usuario desconectado
       socket.on("disconnected", () => {
         console.log("❌ Usuario desconectado");
-        // Mostrar nuevamente la instrucción
-        qrInstruction.style.display = "list-item";
-        qrcode.setAttribute("src", "./assets/loader.gif");
-        iduser.innerHTML = "";
+        updateStatus("disconnected", "Desconectado - Esperando nueva conexión");
+      });
+
+      // Manejar errores de conexión
+      socket.on("connect_error", (error) => {
+        console.error("❌ Error de conexión:", error);
+        updateStatus("disconnected", "Error de conexión");
+      });
+
+      // Manejar reconexión
+      socket.on("reconnect", (attemptNumber) => {
+        console.log(`🔄 Reconectado después de ${attemptNumber} intentos`);
+        if (id_externo) {
+          socket.emit("joinSession", id_externo);
+        }
       });
     </script>
   </body>
