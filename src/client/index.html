@@ -187,18 +187,18 @@
 
       #iduser {
         color: #2d3748;
-        font-weight: 700;
-        font-size: 16px;
+        font-size: 14px;
         text-align: center;
         margin-top: 16px;
-        padding: 12px;
+        padding: 16px;
         background: linear-gradient(
           135deg,
-          rgba(102, 126, 234, 0.1) 0%,
-          rgba(118, 75, 162, 0.1) 100%
+          rgba(102, 126, 234, 0.08) 0%,
+          rgba(118, 75, 162, 0.08) 100%
         );
         border-radius: 8px;
         border: 2px solid rgba(102, 126, 234, 0.2);
+        line-height: 1.6;
       }
 
       .status-indicator {
@@ -392,7 +392,7 @@
       }
 
       // Función para actualizar el estado visual
-      function updateStatus(status, text) {
+      function updateStatus(status, text, userData = null) {
         // Actualizar clases del indicador
         statusIndicator.className = `status-indicator ${status}`;
         statusDot.className = `status-dot ${status}`;
@@ -411,6 +411,11 @@
             qrcodeContainer.style.display = "none";
             whatsappIcon.classList.add("connected");
             setTimeout(() => whatsappIcon.classList.remove("connected"), 600);
+
+            // Mostrar datos del usuario si están disponibles
+            if (userData) {
+              displayUserInfo(userData);
+            }
             break;
           case "disconnected":
             instructionCard.classList.remove("hidden");
@@ -421,6 +426,42 @@
             iduser.innerHTML = "";
             break;
         }
+      }
+
+      // Función para mostrar información del usuario
+      function displayUserInfo(user) {
+        if (!user) return;
+
+        // Si es string, mostrar solo el nombre
+        if (typeof user === "string") {
+          iduser.innerHTML = `<strong>Usuario:</strong> ${user}`;
+          return;
+        }
+
+        // Si es objeto, mostrar todos los datos
+        const nombre = user.nombre || user.name || "Usuario sin nombre";
+        const idExterno = user.id_externo || "";
+        const receiveMessages = user.receive_messages ? "✅ Sí" : "❌ No";
+        const fecha = user.fecha || user.fechaCreacion;
+
+        let html = `<strong style="font-size: 16px;">👤 ${nombre}</strong>`;
+
+        if (idExterno) {
+          html += `<br><small style="color: #718096;"><b>ID:</b> ${idExterno}</small>`;
+        }
+
+        if (fecha) {
+          const fechaFormateada = new Date(fecha).toLocaleDateString("es-ES", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          });
+          html += `<br><small style="color: #718096;"><b>📅 Registrado:</b> ${fechaFormateada}</small>`;
+        }
+
+        html += `<br><small style="color: #718096;"><b>📨 Recibe mensajes:</b> ${receiveMessages}</small>`;
+
+        iduser.innerHTML = html;
       }
 
       // Evento: Recibir QR
@@ -446,16 +487,13 @@
       // Evento: Recibir datos del usuario
       socket.on("user", (user) => {
         console.log("👤 Usuario recibido:", user);
-        const userName = user.nombre || user.name || user;
-        iduser.innerHTML = `<strong>Usuario:</strong> ${userName}`;
+        displayUserInfo(user);
       });
 
       // Evento: Usuario conectado
-      socket.on("connected", (isConnected) => {
-        if (isConnected) {
-          console.log("✅ Usuario conectado exitosamente");
-          updateStatus("connected", "Conectado");
-        }
+      socket.on("connected", (userData) => {
+        console.log("✅ Usuario conectado exitosamente", userData);
+        updateStatus("connected", "Conectado", userData);
       });
 
       // Evento: Usuario desconectado

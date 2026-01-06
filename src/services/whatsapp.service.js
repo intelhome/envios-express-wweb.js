@@ -126,9 +126,8 @@ exports.connectToWhatsApp = async (id_externo, receiveMessages) => {
 /**
  * Configurar eventos del cliente WhatsApp
  */
-function setupClientEvents(client, id_externo, receiveMessages) {
+async function setupClientEvents(client, id_externo, receiveMessages) {
     client.removeAllListeners();
-    const user = userService.getUserByIdExterno(id_externo);
 
     // Evento: QR generado
     client.on('qr', async (qr) => {
@@ -158,23 +157,40 @@ function setupClientEvents(client, id_externo, receiveMessages) {
     client.on('ready', async () => {
         console.log(`✔️ Cliente listo: ${id_externo}`);
 
-        WhatsAppSessions[id_externo] = {
-            client,
-            connectedAt: Date.now(),
-            qrGeneratedAt: null,
-            qrCode: null,
-        };
+        try {
+            // ✅ OBTENER USUARIO FRESCO AQUÍ
+            const user = await userService.getUserByIdExterno(id_externo);
 
-        await userService.updateUser(id_externo, { estado: 'conectado' });
-        socketService.emitConnected(id_externo, {
-            id: user.id || id_externo,
-            nombre: user.nombre || user.name || 'Usuario'
-        });
+            if (!user) {
+                console.error(`❌ Usuario no encontrado: ${id_externo}`);
+                return;
+            }
 
-        // Ejecutar garbage collection si está disponible
-        if (global.gc) {
-            global.gc();
-            console.log(`🧹 GC ejecutado para ${id_externo}`);
+            WhatsAppSessions[id_externo] = {
+                client,
+                connectedAt: Date.now(),
+                qrGeneratedAt: null,
+                qrCode: null,
+            };
+
+            await userService.updateUser(id_externo, { estado: 'conectado' });
+            console.log(`✅ Estado actualizado a 'conectado': ${id_externo}`);
+
+            socketService.emitConnected(id_externo, {
+                id: user._id || user.id || id_externo,
+                nombre: user.nombre || user.name || 'Usuario',
+                id_externo: user.id_externo,
+                fecha: user.fechaCreacion || user.fecha,
+                receive_messages: user.receive_messages,
+            });
+
+            // Ejecutar garbage collection si está disponible
+            if (global.gc) {
+                global.gc();
+                console.log(`🧹 GC ejecutado para ${id_externo}`);
+            }
+        } catch (error) {
+            console.error(`❌ Error en ready ${id_externo}:`, error);
         }
     });
 

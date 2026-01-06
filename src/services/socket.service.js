@@ -70,14 +70,16 @@ exports.emitConnected = (id_externo, userData = null) => {
     }
 
     console.log(`📤 Emitiendo ready a sala: ${id_externo}`);
-    
+
     const payload = userData ? {
-        connected: true,
-        id: userData.id,
-        nombre: userData.nombre,
+        id: userData.id || userData._id || id_externo,
+        nombre: userData.nombre || userData.name || 'Usuario sin nombre',
+        id_externo: userData.id_externo || id_externo,
+        fecha: userData.fecha || userData.fechaCreacion,
+        receive_messages: userData.receive_messages || false,
         timestamp: Date.now()
     } : {
-        connected: true,
+        id_externo: id_externo,
         timestamp: Date.now()
     };
 
@@ -85,7 +87,7 @@ exports.emitConnected = (id_externo, userData = null) => {
     io.to(id_externo).emit("log", `Conectado: ${payload.nombre}`);
     io.to(id_externo).emit("user", payload);
 
-    io.to(id_externo).emit("connected", true);
+    io.to(id_externo).emit("connected", payload);
 };
 
 /**

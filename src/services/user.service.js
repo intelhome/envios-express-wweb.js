@@ -39,17 +39,39 @@ exports.getAllUsers = async () => {
  * Actualizar usuario
  */
 exports.updateUser = async (id_externo, updatedFields) => {
-    const collection = getCollection(COLLECTION_NAME);
+    try {
+        const collection = getCollection(COLLECTION_NAME);
 
-    return await collection.updateOne(
-        { id_externo },
-        {
-            $set: {
-                ...updatedFields,
-                updatedAt: new Date()
+        console.log(`📝 Actualizando usuario ${id_externo}:`, updatedFields);
+
+        const result = await collection.updateOne(
+            { id_externo },
+            {
+                $set: {
+                    ...updatedFields,
+                    updatedAt: new Date()
+                }
             }
+        );
+
+        console.log(`✅ Resultado de actualización para ${id_externo}:`, {
+            matched: result.matchedCount,
+            modified: result.modifiedCount,
+            acknowledged: result.acknowledged
+        });
+
+        if (result.matchedCount === 0) {
+            console.warn(`⚠️ Usuario ${id_externo} NO encontrado en BD`);
+        } else if (result.modifiedCount === 0) {
+            console.warn(`⚠️ Usuario ${id_externo} encontrado pero NO modificado (quizás mismo valor)`);
         }
-    );
+
+        return result;
+
+    } catch (error) {
+        console.error(`❌ Error actualizando usuario ${id_externo}:`, error);
+        throw error;
+    }
 };
 
 /**
