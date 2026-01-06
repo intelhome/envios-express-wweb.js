@@ -174,7 +174,6 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
             };
 
             await userService.updateUser(id_externo, { estado: 'conectado' });
-            console.log(`✅ Estado actualizado a 'conectado': ${id_externo}`);
 
             socketService.emitConnected(id_externo, {
                 id: user._id || user.id || id_externo,
