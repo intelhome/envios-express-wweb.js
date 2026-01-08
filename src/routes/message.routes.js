@@ -18,4 +18,18 @@ router.post(
     messageController.sendMediaMessage
 );
 
+// Enviar mensajes lid
+router.post(
+    "/lid-media/:id_externo",
+    validateIdExterno,
+    messageController.sendLidMessage
+);
+
+// Enviar mensajes lid
+router.post(
+    "/universal-media/:id_externo",
+    validateIdExterno,
+    messageController.sendMediaMessageUniversal
+);
+
 module.exports = router;
