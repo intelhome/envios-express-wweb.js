@@ -332,7 +332,7 @@ exports.handleIncomingMessage = async (message, id_externo, client) => {
         await sendToWebhook({
             id: message.id.id,
             empresa: 'sigcrm_clinicasancho',
-            name: contactName,
+            name: senderNumber.replace('@c.us', ''),
             senderNumber: senderNumber,
             reciberNumber,
             description: captureMessage,
