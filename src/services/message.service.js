@@ -249,56 +249,34 @@ exports.handleIncomingMessage = async (message, id_externo, client) => {
             return;
         }
         const from = message.from || '';
-        const senderNumber = from;
+        let senderNumber = from;
+        let contactName = '';
 
-        // Extraer solo el número limpio para logs/procesamiento interno
-        let phoneNumber = from.replace('@c.us', '')
-            .replace('@lid', '')
-            .replace('@g.us', '')
-            .replace(/\D/g, '');
+        if (senderNumber.includes('@lid')) {
+            // ⭐ getContactLidAndPhone devuelve un array, necesitas extraer el número
+            const contactInfoArray = await client.getContactLidAndPhone([senderNumber]);
+
+            if (contactInfoArray && contactInfoArray.length > 0) {
+                const data = contactInfoArray[0];
+                senderNumber = data.pn;
+                console.log(`✅ Número real obtenido: ${senderNumber}`);
+            } else {
+                console.warn(`⚠️ No se pudo obtener el número real para ${senderNumber}`);
+            }
+        }
 
         // Intentar obtener el número del contacto para validación
         try {
             const contact = await message.getContact();
-            if (contact && contact.number) {
-                phoneNumber = contact.number.replace(/\D/g, '');
-            } else if (contact && contact.id && contact.id._serialized) {
-                // Extraer de id._serialized
-                const extracted = contact.id._serialized
-                    .replace('@c.us', '')
-                    .replace('@lid', '')
-                    .replace('@g.us', '')
-                    .split(':')[0]
-                    .replace(/\D/g, '');
-                if (extracted.length >= 10) {
-                    phoneNumber = extracted;
-                }
-            }
+
+            contactName = contact.pushname || // Nombre que el usuario puso en WhatsApp
+                contact.name ||     // Nombre guardado en tu lista de contactos
+                contact.verifiedName || // Nombre verificado (empresas)
+                contact.number ||   // Si no hay nombre, usar número
+                senderNumber.split('@')[0]; // Fallback al ID
+
         } catch (err) {
             console.warn('⚠️ No se pudo obtener contacto, usando número del mensaje');
-        }
-
-        // Si el número tiene formato extraño (muy largo), intentar limpiarlo
-        if (phoneNumber.length > 15) {
-            const cleanNumber = phoneNumber.replace(/\D/g, '');
-            if (cleanNumber.length > 15) {
-                const ecuadorMatch = cleanNumber.match(/593\d{9}/);
-                if (ecuadorMatch) {
-                    phoneNumber = ecuadorMatch[0];
-                } else {
-                    phoneNumber = cleanNumber.slice(-12);
-                }
-            } else {
-                phoneNumber = cleanNumber;
-            }
-        }
-
-        if (!phoneNumber || phoneNumber.length < 10) {
-            console.error('⚠️ Número inválido después de limpieza:', {
-                original: from,
-                senderNumber,
-                phoneNumber
-            });
         }
 
         const reciberNumber = client.info?.wid?.user || 'desconocido';
@@ -354,7 +332,7 @@ exports.handleIncomingMessage = async (message, id_externo, client) => {
         await sendToWebhook({
             id: message.id.id,
             empresa: 'sigcrm_clinicasancho',
-            name: phoneNumber,
+            name: contactName,
             senderNumber: senderNumber,
             reciberNumber,
             description: captureMessage,
@@ -655,7 +633,7 @@ async function sendToWebhook(data) {
 
         console.log('🌐 Enviando datos al webhook:');
         console.log(data);
-
+        return;
         const payload = JSON.stringify(data);
 
         const options = {
