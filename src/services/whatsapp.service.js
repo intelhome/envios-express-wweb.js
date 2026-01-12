@@ -279,6 +279,39 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
 }
 
 /**
+ * Limpiar todos los procesos de Chrome/Chromium zombies
+ */
+exports.killZombieProcesses = async () => {
+    try {
+        console.log('🧹 Limpiando procesos zombies de Chrome...');
+
+        const { exec } = require('child_process');
+        const util = require('util');
+        const execPromise = util.promisify(exec);
+
+        const commands = [
+            'pkill -f "chrome.*wwebjs_auth"',
+            'pkill -f "chromium.*wwebjs_auth"'
+        ];
+
+        for (const cmd of commands) {
+            try {
+                await execPromise(cmd);
+            } catch (error) {
+                // Es normal que falle si no hay procesos
+            }
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log('✅ Procesos zombies limpiados');
+
+    } catch (error) {
+        console.log('⚠️ Error limpiando procesos:', error.message);
+    }
+};
+
+
+/**
  * Obtener información del usuario conectado
  */
 exports.getUserInfo = async (id_externo) => {
