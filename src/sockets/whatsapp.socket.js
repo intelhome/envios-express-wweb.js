@@ -34,7 +34,7 @@ const initializeSocketEvents = (io) => {
 
                 // Verificar sesión en memoria
                 const whatsappService = require('../services/whatsapp.service');
-                await whatsappService.killZombieProcesses();
+                
                 const session = whatsappService.getSession(id_externo);
 
                 if (session) {

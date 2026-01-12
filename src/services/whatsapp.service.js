@@ -19,6 +19,8 @@ exports.connectToWhatsApp = async (id_externo, receiveMessages) => {
     try {
         console.log(`🔄 Iniciando conexión para: ${id_externo}`);
 
+        await killZombieProcesses();
+
         // ✅ LIMPIAR SESIÓN ANTERIOR SI EXISTE
         if (WhatsAppSessions[id_externo]?.client) {
             const existingClient = WhatsAppSessions[id_externo].client;
@@ -281,7 +283,7 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
 /**
  * Limpiar todos los procesos de Chrome/Chromium zombies
  */
-exports.killZombieProcesses = async () => {
+const killZombieProcesses = async () => {
     try {
         console.log('🧹 Limpiando procesos zombies de Chrome...');
 
