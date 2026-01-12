@@ -122,7 +122,9 @@ const scanQR = async (req, res, next) => {
         const user = await userService.getUserByIdExterno(id_externo);
 
         if (!user) {
-            return res.status(404).send("Registro no encontrado");
+            return res.status(404).sendFile(
+                path.join(__dirname, "..", "client", "not-found.html")
+            );
         }
 
         res.sendFile(path.join(__dirname, "..", "client", "index.html"));

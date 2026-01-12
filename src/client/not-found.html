@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sesión no disponible</title>
+    <!-- Ícono de sesión expirada -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔒</text></svg>"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      /* Efecto de círculos animados en el fondo */
+      body::before,
+      body::after {
+        content: "";
+        position: absolute;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.1);
+        animation: float 6s ease-in-out infinite;
+      }
+
+      body::before {
+        width: 300px;
+        height: 300px;
+        top: -150px;
+        right: -150px;
+        animation-delay: 0s;
+      }
+
+      body::after {
+        width: 200px;
+        height: 200px;
+        bottom: -100px;
+        left: -100px;
+        animation-delay: 3s;
+      }
+
+      @keyframes float {
+        0%,
+        100% {
+          transform: translateY(0px) scale(1);
+        }
+        50% {
+          transform: translateY(-20px) scale(1.1);
+        }
+      }
+
+      .container {
+        max-width: 480px;
+        width: 100%;
+        background: white;
+        border-radius: 24px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+        padding: 3.5rem 2.5rem;
+        text-align: center;
+        position: relative;
+        animation: slideUp 0.6s ease-out;
+      }
+
+      @keyframes slideUp {
+        from {
+          opacity: 0;
+          transform: translateY(30px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .error-icon {
+        width: 100px;
+        height: 100px;
+        margin: 0 auto 28px;
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 56px;
+        position: relative;
+        animation: pulse 2s ease-in-out infinite;
+        box-shadow: 0 8px 24px rgba(245, 158, 11, 0.2);
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(1);
+          box-shadow: 0 8px 24px rgba(245, 158, 11, 0.2);
+        }
+        50% {
+          transform: scale(1.05);
+          box-shadow: 0 12px 32px rgba(245, 158, 11, 0.3);
+        }
+      }
+
+      /* Círculo decorativo detrás del ícono */
+      .error-icon::before {
+        content: "";
+        position: absolute;
+        width: 120%;
+        height: 120%;
+        border: 2px solid #fde68a;
+        border-radius: 50%;
+        animation: ripple 2s ease-out infinite;
+      }
+
+      @keyframes ripple {
+        0% {
+          transform: scale(1);
+          opacity: 1;
+        }
+        100% {
+          transform: scale(1.4);
+          opacity: 0;
+        }
+      }
+
+      h1 {
+        color: #d97706;
+        margin: 0 0 20px 0;
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+      }
+
+      .description {
+        color: #4b5563;
+        font-size: 16px;
+        line-height: 1.7;
+        margin-bottom: 16px;
+      }
+
+      .subdescription {
+        color: #6b7280;
+        font-size: 14px;
+        line-height: 1.6;
+        margin-bottom: 32px;
+      }
+
+      /* Tarjeta de información adicional */
+      .info-box {
+        background: #fef3c7;
+        border-left: 4px solid #f59e0b;
+        border-radius: 8px;
+        padding: 16px;
+        text-align: left;
+        margin-top: 24px;
+      }
+
+      .info-box-title {
+        font-weight: 600;
+        color: #92400e;
+        font-size: 14px;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .info-box-content {
+        color: #78350f;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      /* Código QR decorativo */
+      .qr-decoration {
+        margin-top: 24px;
+        padding-top: 24px;
+        border-top: 1px solid #e5e7eb;
+      }
+
+      .qr-code-icon {
+        font-size: 48px;
+        opacity: 0.3;
+        filter: grayscale(100%);
+      }
+
+      /* Responsive */
+      @media (max-width: 640px) {
+        .container {
+          padding: 2.5rem 1.5rem;
+        }
+
+        h1 {
+          font-size: 24px;
+        }
+
+        .error-icon {
+          width: 80px;
+          height: 80px;
+          font-size: 48px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="error-icon">❌</div>
+      <h1>Sesión no disponible</h1>
+
+      <p class="description">
+        La sesión de WhatsApp asociada a este código QR ya no existe en el
+        sistema.
+      </p>
+
+      <p class="subdescription">
+        Es posible que la sesión haya sido eliminada o desvinculada desde el
+        panel de administración.
+      </p>
+
+      <div class="info-box">
+        <div class="info-box-title">ℹ️ Información</div>
+        <div class="info-box-content">
+          • La sesión fue eliminada del sistema<br />
+          • El código QR ya no es válido<br />
+          • Contacta al administrador para generar una nueva sesión
+        </div>
+      </div>
+
+      <div class="qr-decoration">
+        <div class="qr-code-icon">📱</div>
+      </div>
+    </div>
+  </body>
+</html>
