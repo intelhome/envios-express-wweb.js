@@ -51,6 +51,7 @@ async function startServer() {
         });
 
         socketService.setIO(io); // ← IMPORTANTE: Configurar primero
+        await whatsappService.killZombieProcesses();
         initializeSocketEvents(io);
         console.log("✅ Socket.IO inicializado");
 

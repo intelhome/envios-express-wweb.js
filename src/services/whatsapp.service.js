@@ -19,8 +19,6 @@ exports.connectToWhatsApp = async (id_externo, receiveMessages) => {
     try {
         console.log(`🔄 Iniciando conexión para: ${id_externo}`);
 
-        await killZombieProcesses();
-
         // ✅ LIMPIAR SESIÓN ANTERIOR SI EXISTE
         if (WhatsAppSessions[id_externo]?.client) {
             const existingClient = WhatsAppSessions[id_externo].client;
