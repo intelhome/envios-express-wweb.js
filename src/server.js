@@ -93,9 +93,27 @@ async function startServer() {
         }
 
         // 7. Iniciar servidor
-        server.listen(PORT, () => {
+        // server.listen(PORT, () => {
+        //     console.log(`✅ Servidor corriendo en puerto ${PORT}`);
+        //     console.log(`🌐 URL: http://localhost:${PORT}`);
+        // });
+
+        server.listen(PORT, async () => {
             console.log(`✅ Servidor corriendo en puerto ${PORT}`);
-            console.log(`🌐 URL: http://localhost:${PORT}`);
+
+            // 7. ⭐ RESTAURAR SESIONES DESPUÉS DE QUE EL SERVIDOR ESTÉ LISTO
+            console.log("\n🔄 Iniciando restauración de sesiones...\n");
+
+            const whatsappService = require('./services/whatsapp.service');
+            const result = await whatsappService.restoreAllSessions();
+
+            console.log(`\n✅ Proceso de restauración completado:`);
+            console.log(`   📊 Total: ${result.total}`);
+            console.log(`   ✅ Restauradas: ${result.restored}`);
+            console.log(`   ❌ Fallidas: ${result.failed}`);
+            if (result.error) {
+                console.log(`   ⚠️  Error: ${result.error}`);
+            }
         });
 
         // 8. Manejo de señales de cierre
