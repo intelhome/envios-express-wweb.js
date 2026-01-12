@@ -631,9 +631,8 @@ function formatPhoneNumber(number) {
 async function sendToWebhook(data) {
     return new Promise((resolve, reject) => {
 
-        console.log('🌐 Enviando datos al webhook:');
         console.log(data);
-        return;
+
         const payload = JSON.stringify(data);
 
         const options = {
