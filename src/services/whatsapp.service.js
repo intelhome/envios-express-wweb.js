@@ -281,7 +281,7 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
 /**
  * Limpiar todos los procesos de Chrome/Chromium zombies
  */
-const killZombieProcesses = async () => {
+exports.killZombieProcesses = async () => {
     try {
         console.log('🧹 Limpiando procesos zombies de Chrome...');
 
