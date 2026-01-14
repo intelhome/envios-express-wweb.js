@@ -158,6 +158,12 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
         console.log(`✔️ Cliente listo: ${id_externo}`);
 
         try {
+            await client.pupPage.evaluate(() => {
+                if (window.WWebJS?.sendSeen) {
+                    window.WWebJS.sendSeen = () => { };
+                }
+            });
+
             // ✅ OBTENER USUARIO FRESCO AQUÍ
             const user = await userService.getUserByIdExterno(id_externo);
 
