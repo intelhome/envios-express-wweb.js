@@ -643,7 +643,7 @@ async function sendToWebhook(data) {
                 'Content-Type': 'application/json',
                 'Content-Length': Buffer.byteLength(payload)
             },
-            timeout: 10000
+            timeout: 50000
         };
 
         const req = https.request(options, (res) => {
