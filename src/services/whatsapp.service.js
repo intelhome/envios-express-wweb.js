@@ -21,6 +21,34 @@ exports.getSessionStatus = (id_externo) => {
     };
 };
 
+// Funcion que valida que la sesion se  inicie al 100% 
+async function waitForSessionReady(userId, timeout = 90000) {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeout) {
+        const session = WhatsAppSessions[userId];
+
+        if (!session) {
+            await new Promise(r => setTimeout(r, 2000));
+            continue;
+        }
+
+        // ✅ Llegó a ready
+        if (session.status === 'ready') {
+            return 'ready';
+        }
+
+        // 📱 Generó QR
+        if (session.status === 'qr_code' || session.qr) {
+            return 'qr';
+        }
+
+        await new Promise(r => setTimeout(r, 2000));
+    }
+
+    return 'timeout';
+}
+
 /**
  * Conectar a WhatsApp
  */
