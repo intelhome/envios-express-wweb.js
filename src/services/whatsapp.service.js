@@ -76,7 +76,6 @@ exports.connectToWhatsApp = async (id_externo, receiveMessages) => {
 
             delete WhatsAppSessions[id_externo];
 
-            // ⭐ Esperar más tiempo en Docker
             const waitTime = process.env.DOCKER_ENV === 'true' ? 8000 : 3000;
             console.log(`⏳ Esperando ${waitTime / 1000}s antes de crear nueva sesión...`);
             await new Promise(resolve => setTimeout(resolve, waitTime));
@@ -100,7 +99,6 @@ exports.connectToWhatsApp = async (id_externo, receiveMessages) => {
         // Configurar eventos del cliente
         setupClientEvents(client, id_externo, receiveMessages);
 
-        // ⭐ Timeout más largo en Docker
         const timeout = process.env.DOCKER_ENV === 'true' ? 180000 : 180000;
         console.log(`🚀 Inicializando cliente (timeout: ${timeout / 1000}s)...`);
 
@@ -114,12 +112,22 @@ exports.connectToWhatsApp = async (id_externo, receiveMessages) => {
         console.log(`✅ Cliente inicializado correctamente para ${id_externo}`);
         WhatsAppSessions[id_externo].status = 'initialized';
 
+        // ⭐ ESPERAR A QUE LLEGUE A READY O GENERE QR
+        const finalStatus = await waitForSessionReady(id_externo, 90000);
+
+        if (finalStatus === 'ready') {
+            console.log(`✅ ${id_externo} conectado exitosamente`);
+        } else if (finalStatus === 'qr') {
+            console.log(`📱 ${id_externo} esperando escaneo de QR`);
+        } else {
+            console.log(`⚠️ ${id_externo} timeout esperando conexión`);
+        }
+
         return client;
 
     } catch (error) {
         console.error(`❌ Error conectando WhatsApp para ${id_externo}:`, error.message);
 
-        // ⭐ Si es error de protocolo, eliminar sesión corrupta
         if (error.message.includes('Protocol error') ||
             error.message.includes('Session closed')) {
 
@@ -139,7 +147,6 @@ exports.connectToWhatsApp = async (id_externo, receiveMessages) => {
             }
         }
 
-        // ✅ Limpiar cliente
         if (client) {
             try {
                 if (typeof client.removeAllListeners === 'function') {
@@ -153,7 +160,6 @@ exports.connectToWhatsApp = async (id_externo, receiveMessages) => {
             }
         }
 
-        // ✅ Limpiar de memoria
         if (WhatsAppSessions[id_externo]) {
             delete WhatsAppSessions[id_externo];
         }
