@@ -75,20 +75,103 @@ async function startServer() {
         const users = await userService.getAllUsers();
 
         if (users && users.length > 0) {
-            for (const user of users) {
+            const SESSION_READY_TIMEOUT = 120000; // 2 minutos
+            const DELAY_BETWEEN_SESSIONS = 10000; // 10 segundos entre sesiones
+
+            const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+            // Función que espera al estado 'ready'
+            const waitForReady = (userId, timeout = SESSION_READY_TIMEOUT) => {
+                return new Promise((resolve) => {
+                    const startTime = Date.now();
+
+                    const checkInterval = setInterval(() => {
+                        const sessionStatus = whatsappService.getSessionStatus(userId);
+                        
+                        console.log(sessionStatus)
+                        // ⭐ Usar la función del servicio
+                        const elapsed = Date.now() - startTime;
+
+                        if (!sessionStatus) {
+                            // La sesión no existe aún
+                            if (elapsed >= timeout) {
+                                clearInterval(checkInterval);
+                                resolve('timeout');
+                            }
+                            return;
+                        }
+
+                        // ✅ Llegó a ready
+                        if (sessionStatus.status === 'ready') {
+                            clearInterval(checkInterval);
+                            console.log(`✅ ${userId} READY en ${Math.round(elapsed / 1000)}s`);
+                            resolve('ready');
+                        }
+
+                        // 📱 Generó QR (no tiene sesión)
+                        else if (sessionStatus.qr || sessionStatus.status === 'initialized') {
+                            clearInterval(checkInterval);
+                            console.log(`📱 ${userId} requiere QR, continuando...`);
+                            resolve('qr');
+                        }
+
+                        // ⏱️ Timeout
+                        else if (elapsed >= timeout) {
+                            clearInterval(checkInterval);
+                            console.warn(`⏱️ TIMEOUT: ${userId} quedó en estado '${sessionStatus.status}'`);
+                            resolve('timeout');
+                        }
+                    }, 3000); // Verificar cada 3 segundos
+                });
+            };
+
+            let readyCount = 0;
+            let qrCount = 0;
+            let timeoutCount = 0;
+
+            for (let i = 0; i < users.length; i++) {
+                const user = users[i];
+
                 try {
-                    await whatsappService.connectToWhatsApp(
+                    console.log(`\n🔌 [${i + 1}/${users.length}] Conectando ${user.id_externo}...`);
+
+                    // Iniciar conexión (no esperar a que termine initialize)
+                    whatsappService.connectToWhatsApp(
                         user.id_externo,
                         user.receive_messages
-                    );
+                    ).catch(err => {
+                        console.error(`❌ Error en connectToWhatsApp para ${user.id_externo}:`, err.message);
+                    });
+
+                    // ⭐ Esperar a que llegue a ready, genere QR, o timeout
+                    const result = await waitForReady(user.id_externo);
+
+                    if (result === 'ready') {
+                        readyCount++;
+                    } else if (result === 'qr') {
+                        qrCount++;
+                    } else if (result === 'timeout') {
+                        timeoutCount++;
+                    }
+
                 } catch (error) {
-                    console.error(
-                        `⚠️ Error reconectando ${user.id_externo}:`,
-                        error.message
-                    );
+                    console.error(`⚠️ Error procesando ${user.id_externo}:`, error.message);
+                    timeoutCount++;
+                }
+
+                // Pausa entre sesiones
+                if (i < users.length - 1) {
+                    console.log(`⏸️ Esperando ${DELAY_BETWEEN_SESSIONS / 1000}s antes de la siguiente...`);
+                    await wait(DELAY_BETWEEN_SESSIONS);
                 }
             }
-            console.log(`✅ ${users.length} sesiones procesadas`);
+
+            console.log(`\n📊 RESUMEN DE RECONEXIÓN:`);
+            console.log(`✅ Sesiones READY: ${readyCount}`);
+            console.log(`📱 Sesiones esperando QR: ${qrCount}`);
+            console.log(`⏱️ Sesiones con timeout: ${timeoutCount}`);
+            console.log(`📝 Total procesadas: ${users.length}`);
+
         } else {
             console.log("ℹ️ No hay sesiones para reconectar");
         }

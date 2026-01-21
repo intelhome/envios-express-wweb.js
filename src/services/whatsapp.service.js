@@ -10,6 +10,17 @@ const { NO_RECONNECT_REASONS } = require('../config/whatsapp');
 // Almacén de sesiones en memoria
 const WhatsAppSessions = {};
 
+exports.getSessionStatus = (id_externo) => {
+    const session = WhatsAppSessions[id_externo];
+    if (!session) return null;
+
+    return {
+        status: session.status,
+        qr: session.qr || null,
+        ready: session.status === 'ready'
+    };
+};
+
 /**
  * Conectar a WhatsApp
  */
@@ -62,7 +73,7 @@ exports.connectToWhatsApp = async (id_externo, receiveMessages) => {
         setupClientEvents(client, id_externo, receiveMessages);
 
         // ⭐ Timeout más largo en Docker
-        const timeout = process.env.DOCKER_ENV === 'true' ? 180000 : 90000;
+        const timeout = process.env.DOCKER_ENV === 'true' ? 180000 : 180000;
         console.log(`🚀 Inicializando cliente (timeout: ${timeout / 1000}s)...`);
 
         await Promise.race([
@@ -137,7 +148,10 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
 
         // Guardar en sesión
         WhatsAppSessions[id_externo] = {
+            ...WhatsAppSessions[id_externo], // Mantener datos existentes
             client,
+            status: 'qr_code', // ⭐ AÑADIR
+            qr: qrCodeData, // ⭐ AÑADIR
             connectedAt: null,
             qrGeneratedAt: Date.now(),
             qrCode: qrCodeData,
@@ -146,14 +160,19 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
         socketService.emitQR(id_externo, qrCodeData);
     });
 
-    // Evento: Autenticado
     client.on('authenticated', async () => {
         console.log(`✅ Autenticado: ${id_externo}`);
+
+        // ⭐ AÑADIR
+        if (WhatsAppSessions[id_externo]) {
+            WhatsAppSessions[id_externo].status = 'authenticated';
+            WhatsAppSessions[id_externo].qr = null;
+        }
+
         await userService.updateUser(id_externo, { estado: 'autenticado' });
         socketService.emitAuthStatus(id_externo);
     });
 
-    // Evento: Cliente listo
     client.on('ready', async () => {
         console.log(`✔️ Cliente listo: ${id_externo}`);
 
@@ -164,7 +183,6 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
                 }
             });
 
-            // ✅ OBTENER USUARIO FRESCO AQUÍ
             const user = await userService.getUserByIdExterno(id_externo);
 
             if (!user) {
@@ -174,6 +192,7 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
 
             WhatsAppSessions[id_externo] = {
                 client,
+                status: 'ready', // ⭐ AÑADIR
                 connectedAt: Date.now(),
                 qrGeneratedAt: null,
                 qrCode: null,
@@ -189,7 +208,6 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
                 receive_messages: user.receive_messages,
             });
 
-            // Ejecutar garbage collection si está disponible
             if (global.gc) {
                 global.gc();
                 console.log(`🧹 GC ejecutado para ${id_externo}`);
