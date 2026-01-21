@@ -24,6 +24,7 @@ exports.getSessionStatus = (id_externo) => {
 // Funcion que valida que la sesion se  inicie al 100% 
 async function waitForSessionReady(userId, timeout = 90000) {
     const startTime = Date.now();
+    let authenticated = false;
 
     while (Date.now() - startTime < timeout) {
         const session = WhatsAppSessions[userId];
@@ -43,6 +44,20 @@ async function waitForSessionReady(userId, timeout = 90000) {
             return 'qr';
         }
 
+        // 🔄 Detectar authenticated pero no ready
+        if (session.status === 'authenticated') {
+            if (!authenticated) {
+                authenticated = true;
+                console.log(`⏳ ${userId} autenticado, esperando ready...`);
+            }
+
+            // Si lleva más de 60s en authenticated, es timeout
+            if (Date.now() - startTime > 60000) {
+                console.warn(`⚠️ ${userId} quedó en authenticated, necesita reconexión`);
+                return 'authenticated_stuck';
+            }
+        }
+
         await new Promise(r => setTimeout(r, 2000));
     }
 
@@ -52,11 +67,12 @@ async function waitForSessionReady(userId, timeout = 90000) {
 /**
  * Conectar a WhatsApp
  */
-exports.connectToWhatsApp = async (id_externo, receiveMessages) => {
+exports.connectToWhatsApp = async (id_externo, receiveMessages, retryCount = 0) => {
+    const MAX_RETRIES = 2;
     let client = null;
 
     try {
-        console.log(`🔄 Iniciando conexión para: ${id_externo}`);
+        console.log(`🔄 Iniciando conexión para: ${id_externo}${retryCount > 0 ? ` (intento ${retryCount + 1})` : ''}`);
 
         // ✅ LIMPIAR SESIÓN ANTERIOR SI EXISTE
         if (WhatsAppSessions[id_externo]?.client) {
@@ -92,7 +108,7 @@ exports.connectToWhatsApp = async (id_externo, receiveMessages) => {
         WhatsAppSessions[id_externo] = {
             client,
             status: 'connecting',
-            retries: 0
+            retries: retryCount
         };
         console.log(`💾 Sesión guardada para ${id_externo}`);
 
@@ -117,12 +133,36 @@ exports.connectToWhatsApp = async (id_externo, receiveMessages) => {
 
         if (finalStatus === 'ready') {
             console.log(`✅ ${id_externo} conectado exitosamente`);
-        } else if (finalStatus === 'qr') {
-            console.log(`📱 ${id_externo} esperando escaneo de QR`);
-        } else {
-            console.log(`⚠️ ${id_externo} timeout esperando conexión`);
+            return client;
         }
 
+        if (finalStatus === 'qr') {
+            console.log(`📱 ${id_externo} esperando escaneo de QR`);
+            return client;
+        }
+
+        // 🔄 Si quedó en authenticated_stuck, reintentar
+        if (finalStatus === 'authenticated_stuck' && retryCount < MAX_RETRIES) {
+            console.log(`🔄 Reintentando conexión para ${id_externo}...`);
+
+            // Limpiar cliente actual
+            if (client) {
+                try {
+                    client.removeAllListeners();
+                    await client.destroy();
+                } catch (e) {
+                    console.warn(`⚠️ Error limpiando:`, e.message);
+                }
+            }
+
+            // Esperar antes de reintentar
+            await new Promise(r => setTimeout(r, 5000));
+
+            // Reintentar recursivamente
+            return await exports.connectToWhatsApp(id_externo, receiveMessages, retryCount + 1);
+        }
+
+        console.log(`⚠️ ${id_externo} timeout esperando conexión`);
         return client;
 
     } catch (error) {

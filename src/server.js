@@ -75,20 +75,30 @@ async function startServer() {
         const users = await userService.getAllUsers();
 
         if (users && users.length > 0) {
-            for (const user of users) {
+            const DELAY_BETWEEN_SESSIONS = 5000;
+
+            for (let i = 0; i < users.length; i++) {
+                const user = users[i];
+
                 try {
+                    console.log(`\n[${i + 1}/${users.length}] Conectando ${user.id_externo}...`);
+
                     await whatsappService.connectToWhatsApp(
                         user.id_externo,
                         user.receive_messages
                     );
+
                 } catch (error) {
-                    console.error(
-                        `⚠️ Error reconectando ${user.id_externo}:`,
-                        error.message
-                    );
+                    console.error(`⚠️ Error reconectando ${user.id_externo}:`, error.message);
+                }
+
+                // Pausa entre sesiones
+                if (i < users.length - 1) {
+                    await new Promise(r => setTimeout(r, DELAY_BETWEEN_SESSIONS));
                 }
             }
-            console.log(`✅ ${users.length} sesiones procesadas`);
+
+            console.log(`\n✅ ${users.length} sesiones procesadas`);
         } else {
             console.log("ℹ️ No hay sesiones para reconectar");
         }
