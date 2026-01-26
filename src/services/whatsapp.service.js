@@ -25,6 +25,7 @@ exports.getSessionStatus = (id_externo) => {
 async function waitForSessionReady(userId, timeout = 90000) {
     const startTime = Date.now();
     let authenticated = false;
+    let authenticatedStartTime = null;
 
     while (Date.now() - startTime < timeout) {
         const session = WhatsAppSessions[userId];
@@ -48,19 +49,29 @@ async function waitForSessionReady(userId, timeout = 90000) {
         if (session.status === 'authenticated') {
             if (!authenticated) {
                 authenticated = true;
-                console.log(`⏳ ${userId} autenticado, esperando ready...`);
+                authenticatedStartTime = Date.now(); // Guardar el momento exacto
+                console.log(`⏳ ${userId} autenticado, esperando ready (máximo 10s)...`);
             }
 
-            // Si lleva más de 60s en authenticated, es timeout
-            if (Date.now() - startTime > 60000) {
-                console.warn(`⚠️ ${userId} quedó en authenticated, necesita reconexión`);
+            // Si lleva más de 10s en authenticated, es timeout
+            const timeInAuthenticated = Date.now() - authenticatedStartTime;
+            if (timeInAuthenticated > 10000) { // 10 segundos
+                console.warn(`⚠️ ${userId} quedó en authenticated por ${Math.round(timeInAuthenticated / 1000)}s, necesita reconexión`);
                 return 'authenticated_stuck';
+            }
+        } else {
+            // Reset si sale de authenticated
+            if (authenticated) {
+                authenticated = false;
+                authenticatedStartTime = null;
             }
         }
 
         await new Promise(r => setTimeout(r, 2000));
     }
 
+    // Timeout general
+    console.error(`❌ ${userId} timeout después de ${timeout / 1000}s`);
     return 'timeout';
 }
 

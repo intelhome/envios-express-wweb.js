@@ -112,7 +112,6 @@ exports.sendMessage = async (id_externo, messageData) => {
         mensaje: {
             id: messageId,
             cuerpo: tempMessage,
-            tipo: type,
             fecha
         },
         meta: {
