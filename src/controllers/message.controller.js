@@ -30,6 +30,13 @@ async function sendMessage(req, res, next) {
             req.body  // Pasa todo el body
         );
 
+        if (result.success === false) {
+            return res.status(400).json({
+                status: false,
+                response: result.message,
+            });
+        }
+
         return res.status(200).json({
             status: true,
             response: result,
@@ -64,6 +71,13 @@ async function sendMediaMessage(req, res, next) {
             id_externo,
             req.body  // Pasa todo el body
         );
+
+        if (result.success === false) {
+            return res.status(400).json({
+                status: false,
+                response: result.message,
+            });
+        }
 
         return res.status(200).json({
             status: true,
@@ -100,7 +114,7 @@ async function sendLidMessage(req, res) {
 
         const result = await messageService.sendLidMessage(id_externo, messageData);
 
-        res.json({
+        res.status(200).json({
             success: true,
             data: result,
             message: 'Mensaje enviado correctamente a contacto @lid'
@@ -133,6 +147,13 @@ async function sendMediaMessageUniversal(req, res, next) {
             id_externo,
             req.body  // Pasa todo el body
         );
+
+        if (result.success === false) {
+            return res.status(400).json({
+                status: false,
+                response: result.message,
+            });
+        }
 
         return res.status(200).json({
             status: true,

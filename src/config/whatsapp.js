@@ -36,7 +36,7 @@ const whatsappConfig = {
             height: 600,
             deviceScaleFactor: 1,
         },
-        timeout: 9000,
+        // timeout: 9000,
     },
     webVersionCache: {
         type: 'none',

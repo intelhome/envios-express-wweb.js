@@ -19,26 +19,41 @@ exports.sendMessage = async (id_externo, messageData) => {
     } = messageData;
 
     const client = whatsappService.getClient(id_externo);
-
     if (!client) {
-        throw new Error('No existe una sesión activa');
+        console.log(`❌ No existe cliente activo ${id_externo}`);
+        return {
+            success: false,
+            message: 'No existe una sesión activa',
+            id_externo: id_externo
+        };
     }
 
     const state = await client.getState();
     if (state !== 'CONNECTED') {
-        throw new Error(`Cliente no conectado. Estado: ${state}`);
+        console.log(`❌ Cliente ${id_externo} no conectado. Estado:`, state);
+        return {
+            success: false,
+            message: `Cliente no conectado. Estado: ${state}`,
+            id_externo: id_externo
+        };
     }
 
     // Formatear número
     const formattedNumber = formatPhoneNumber(number);
 
-    // ✅ CAMBIO CLAVE: Usar getNumberId en lugar de isRegisteredUser + chatId manual
+    // Usar getNumberId en lugar de isRegisteredUser + chatId manual
     let chatId;
     try {
         const numberId = await client.getNumberId(formattedNumber);
 
         if (!numberId) {
-            throw new Error('El número no está registrado en WhatsApp');
+            console.log(`❌ El número ${formattedNumber} NO está registrado en WhatsApp`);
+
+            return {
+                success: false,
+                message: "El número no está registrado en WhatsApp",
+                recipientContact: formattedNumber
+            };
         }
 
         chatId = numberId._serialized;
@@ -84,18 +99,35 @@ exports.sendMessage = async (id_externo, messageData) => {
     }
 
     // Información de respuesta
-    const info = client.info;
+    const { wid: { user: senderNumber } } = client.info;
+    const { id: { _serialized: messageId }, timestamp, ack } = result;
     const fecha = moment().tz('America/Guayaquil').format('YYYY-MM-DD HH:mm:ss');
 
-    console.log(`✅ Mensaje enviado de ${id_externo} a ${formattedNumber}`);
+    // Log de éxito simplificado
+    console.log(`✅ Mensaje enviado: ${id_externo} ➡️ ${formattedNumber}`);
+
+    // Log detallado (mejor estructura para depuración)
+    console.dir({
+        transaccion: { de: `cliente-${id_externo}`, para: chatId },
+        mensaje: {
+            id: messageId,
+            cuerpo: tempMessage,
+            tipo: type,
+            fecha
+        },
+        meta: {
+            enviadoPor: senderNumber,
+            contacto: contactType.toUpperCase()
+        }
+    }, { depth: null, colors: true });
 
     return {
-        messageId: result.id._serialized,
-        timestamp: result.timestamp,
-        senderNumber: info.wid.user,
+        messageId,
+        timestamp,
+        senderNumber,
         recipientNumber: formattedNumber,
-        ack: result.ack,
-        ackName: ACK_STATUS[result.ack] || 'Desconocido',
+        ack,
+        ackName: ACK_STATUS[ack] ?? 'Desconocido', // Uso de Nullish coalescing
         fecha
     };
 };
@@ -107,14 +139,23 @@ exports.sendMediaMessage = async (id_externo, mediaData) => {
     const { number, tempMessage, link, type, latitud, longitud, file } = mediaData;
 
     const client = whatsappService.getClient(id_externo);
-
     if (!client) {
-        throw new Error('No existe una sesión activa');
+        console.log(`❌ No existe cliente activo ${id_externo}`);
+        return {
+            success: false,
+            message: 'No existe una sesión activa',
+            id_externo: id_externo
+        };
     }
 
     const state = await client.getState();
     if (state !== 'CONNECTED') {
-        throw new Error(`Cliente no conectado. Estado: ${state}`);
+        console.log(`❌ Cliente ${id_externo} no conectado. Estado:`, state);
+        return {
+            success: false,
+            message: `Cliente no conectado. Estado: ${state}`,
+            id_externo: id_externo
+        };
     }
 
     const formattedNumber = formatPhoneNumber(number);
@@ -122,7 +163,13 @@ exports.sendMediaMessage = async (id_externo, mediaData) => {
 
     const isRegistered = await client.isRegisteredUser(chatId);
     if (!isRegistered) {
-        throw new Error('El número no está registrado en WhatsApp');
+        console.log(`❌ El número ${chatId} NO está registrado en WhatsApp`);
+
+        return {
+            success: false,
+            message: "El número no está registrado en WhatsApp",
+            recipientContact: chatId
+        };
     }
 
     let result;
@@ -337,9 +384,9 @@ exports.handleIncomingMessage = async (message, id_externo, client) => {
             reciberNumber,
             description: captureMessage,
             messageType: messageType,
-            mediaDataBase64: base64Media,
-            mediaMimeType,
-            mediaFileName,
+            // mediaDataBase64: base64Media,
+            // mediaMimeType,
+            // mediaFileName,
             hasMediaContent,
             timestamp: message.timestamp || Date.now()
         });
@@ -365,14 +412,23 @@ exports.sendLidMessage = async (id_externo, messageData) => {
     } = messageData;
 
     const client = whatsappService.getClient(id_externo);
-
     if (!client) {
-        throw new Error('No existe una sesión activa');
+        console.log(`❌ No existe cliente activo ${id_externo}`);
+        return {
+            success: false,
+            message: 'No existe una sesión activa',
+            id_externo: id_externo
+        };
     }
 
     const state = await client.getState();
     if (state !== 'CONNECTED') {
-        throw new Error(`Cliente no conectado. Estado: ${state}`);
+        console.log(`❌ Cliente ${id_externo} no conectado. Estado:`, state);
+        return {
+            success: false,
+            message: `Cliente no conectado. Estado: ${state}`,
+            id_externo: id_externo
+        };
     }
 
     // Validar formato del chatId
@@ -503,18 +559,45 @@ exports.sendMediaMessageUniversal = async (id_externo, mediaData) => {
 
     const client = whatsappService.getClient(id_externo);
     if (!client) {
-        throw new Error('No existe una sesión activa');
+        console.log(`❌ No existe cliente activo ${id_externo}`);
+        return {
+            success: false,
+            message: 'No existe una sesión activa',
+            id_externo: id_externo
+        };
     }
 
     const state = await client.getState();
     if (state !== 'CONNECTED') {
-        throw new Error(`Cliente no conectado. Estado: ${state}`);
+        console.log(`❌ Cliente ${id_externo} no conectado. Estado:`, state);
+        return {
+            success: false,
+            message: `Cliente no conectado. Estado: ${state}`,
+            id_externo: id_externo
+        };
     }
 
     if (contactType === 'c.us') {
         const isRegistered = await client.isRegisteredUser(chatId);
         if (!isRegistered) {
-            throw new Error('El número no está registrado en WhatsApp');
+            console.log(`❌ El número ${chatId} NO está registrado en WhatsApp`);
+
+            return {
+                success: false,
+                message: "El número no está registrado en WhatsApp",
+                recipientContact: chatId
+            };
+        }
+    } else if (contactType === 'lid') {
+        const isRegistered = await client.isRegisteredUser(chatId);
+        if (!isRegistered) {
+            console.log(`❌ El contacto LID ${chatId} NO está registrado en WhatsApp`);
+
+            return {
+                success: false,
+                message: "El contacto LID no está registrado en WhatsApp",
+                recipientContact: chatId
+            };
         }
     }
 
@@ -593,6 +676,7 @@ exports.sendMediaMessageUniversal = async (id_externo, mediaData) => {
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
     return {
+        success: true,
         messageId: result.id._serialized,
         timestamp: result.timestamp,
         senderNumber: info.wid.user,
@@ -631,7 +715,7 @@ function formatPhoneNumber(number) {
 async function sendToWebhook(data) {
     return new Promise((resolve, reject) => {
 
-        console.log(data);
+        // console.log(data);
 
         const payload = JSON.stringify(data);
 
