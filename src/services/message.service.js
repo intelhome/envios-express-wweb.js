@@ -383,9 +383,9 @@ exports.handleIncomingMessage = async (message, id_externo, client) => {
             reciberNumber,
             description: captureMessage,
             messageType: messageType,
-            // mediaDataBase64: base64Media,
-            // mediaMimeType,
-            // mediaFileName,
+            mediaDataBase64: base64Media,
+            mediaMimeType,
+            mediaFileName,
             hasMediaContent,
             timestamp: message.timestamp || Date.now()
         });
