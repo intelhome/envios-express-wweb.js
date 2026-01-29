@@ -55,7 +55,7 @@ async function waitForSessionReady(userId, timeout = 90000) {
 
             // Si lleva más de 10s en authenticated, es timeout
             const timeInAuthenticated = Date.now() - authenticatedStartTime;
-            if (timeInAuthenticated > 10000) { // 10 segundos
+            if (timeInAuthenticated > 50000) { // 10 segundos
                 console.warn(`⚠️ ${userId} quedó en authenticated por ${Math.round(timeInAuthenticated / 1000)}s, necesita reconexión`);
                 return 'authenticated_stuck';
             }
@@ -136,44 +136,58 @@ exports.connectToWhatsApp = async (id_externo, receiveMessages, retryCount = 0) 
             ),
         ]);
 
+        // Cambiar manualmente estado a ready
+        setTimeout(async () => {
+            if (client.pupPage && WhatsAppSessions[id_externo]?.status !== 'ready') {
+                const estaEnChats = await client.pupPage.evaluate(() => {
+                    return !!document.querySelector('#side') || !!document.querySelector('.two');
+                });
+
+                if (estaEnChats) {
+                    console.log("⚡Interfaz detectada manualmente. Disparando READY forzado.");
+                    client.emit('ready');
+                }
+            }
+        }, 10000);
+
         console.log(`✅ Cliente inicializado correctamente para ${id_externo}`);
         WhatsAppSessions[id_externo].status = 'initialized';
 
         // ⭐ ESPERAR A QUE LLEGUE A READY O GENERE QR
-        const finalStatus = await waitForSessionReady(id_externo, 90000);
+        // const finalStatus = await waitForSessionReady(id_externo, 90000);
 
-        if (finalStatus === 'ready') {
-            console.log(`✅ ${id_externo} conectado exitosamente`);
-            return client;
-        }
+        // if (finalStatus === 'ready') {
+        //     console.log(`✅ ${id_externo} conectado exitosamente`);
+        //     return client;
+        // }
 
-        if (finalStatus === 'qr') {
-            console.log(`📱 ${id_externo} esperando escaneo de QR`);
-            return client;
-        }
+        // if (finalStatus === 'qr') {
+        //     console.log(`📱 ${id_externo} esperando escaneo de QR`);
+        //     return client;
+        // }
 
-        // 🔄 Si quedó en authenticated_stuck, reintentar
-        if (finalStatus === 'authenticated_stuck' && retryCount < MAX_RETRIES) {
-            console.log(`🔄 Reintentando conexión para ${id_externo}...`);
+        // // 🔄 Si quedó en authenticated_stuck, reintentar
+        // if (finalStatus === 'authenticated_stuck' && retryCount < MAX_RETRIES) {
+        //     console.log(`🔄 Reintentando conexión para ${id_externo}...`);
 
-            // Limpiar cliente actual
-            if (client) {
-                try {
-                    client.removeAllListeners();
-                    await client.destroy();
-                } catch (e) {
-                    console.warn(`⚠️ Error limpiando:`, e.message);
-                }
-            }
+        //     // Limpiar cliente actual
+        //     if (client) {
+        //         try {
+        //             client.removeAllListeners();
+        //             await client.destroy();
+        //         } catch (e) {
+        //             console.warn(`⚠️ Error limpiando:`, e.message);
+        //         }
+        //     }
 
-            // Esperar antes de reintentar
-            await new Promise(r => setTimeout(r, 5000));
+        //     // Esperar antes de reintentar
+        //     await new Promise(r => setTimeout(r, 10000));
 
-            // Reintentar recursivamente
-            return await exports.connectToWhatsApp(id_externo, receiveMessages, retryCount + 1);
-        }
+        //     // Reintentar recursivamente
+        //     return await exports.connectToWhatsApp(id_externo, receiveMessages, retryCount + 1);
+        // }
 
-        console.log(`⚠️ ${id_externo} timeout esperando conexión`);
+        // console.log(`⚠️ ${id_externo} timeout esperando conexión`);
         return client;
 
     } catch (error) {
@@ -226,7 +240,7 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
     client.removeAllListeners();
 
     // Evento: QR generado
-    client.on('qr', async (qr) => {
+    client.once('qr', async (qr) => {
         console.log(`📱 QR generado para: ${id_externo}`);
 
         const qrCodeData = await QRCode.toDataURL(qr);
@@ -245,7 +259,7 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
         socketService.emitQR(id_externo, qrCodeData);
     });
 
-    client.on('authenticated', async () => {
+    client.once('authenticated', async () => {
         console.log(`✅ Autenticado: ${id_externo}`);
 
         // ⭐ AÑADIR
@@ -258,7 +272,7 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
         socketService.emitAuthStatus(id_externo);
     });
 
-    client.on('ready', async () => {
+    client.once('ready', async () => {
         console.log(`✔️ Cliente listo: ${id_externo}`);
 
         try {
@@ -277,7 +291,7 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
 
             WhatsAppSessions[id_externo] = {
                 client,
-                status: 'ready', // ⭐ AÑADIR
+                status: 'ready',
                 connectedAt: Date.now(),
                 qrGeneratedAt: null,
                 qrCode: null,
@@ -302,8 +316,16 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
         }
     });
 
+    if (client.pupPage) {
+        client.pupPage.on('console', msg => {
+            if (msg.text().includes('WWebJS')) {
+                console.log('🖥️ Consola Navegador:', msg.text());
+            }
+        });
+    }
+
     // Evento: Desconectado
-    client.on('disconnected', async (reason) => {
+    client.once('disconnected', async (reason) => {
         console.log(`❌ Desconectado ${id_externo}:`, reason);
 
         // 1. PRIMERO: Limpiar sesión de memoria INMEDIATAMENTE
@@ -364,7 +386,7 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
         }
     });
     // Evento: Error de autenticación
-    client.on('auth_failure', async (msg) => {
+    client.once('auth_failure', async (msg) => {
         console.error(`❌ Error de autenticación ${id_externo}:`, msg);
         await userService.updateUser(id_externo, {
             estado: 'error_autenticacion',
@@ -375,11 +397,11 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
 
     // Recepción de mensajes
     if (receiveMessages) {
-        client.on('message', async (message) => {
+        client.once('message', async (message) => {
             await messageService.handleIncomingMessage(message, id_externo, client);
         });
 
-        client.on('message_revoke_everyone', async (revokedMsg) => {
+        client.once('message_revoke_everyone', async (revokedMsg) => {
             console.log(`🗑️ Mensaje eliminado: ${revokedMsg.id._serialized}`);
         });
 

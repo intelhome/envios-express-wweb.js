@@ -33,7 +33,7 @@
     "request": "^2.88.2",
     "sharp": "^0.29.3",
     "socket.io": "^4.5.0",
-    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js",
+    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js#main",
     "wwebjs-mongo": "^1.1.0"
   }
 }

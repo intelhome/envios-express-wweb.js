@@ -1,0 +1,7 @@
+{
+    "ignore": [
+        ".wwebjs_auth/*",
+        "sessions/*",
+        "node_modules/*"
+    ]
+}

@@ -103,6 +103,8 @@ exports.sendMessage = async (id_externo, messageData) => {
     const { id: { _serialized: messageId }, timestamp, ack } = result;
     const fecha = moment().tz('America/Guayaquil').format('YYYY-MM-DD HH:mm:ss');
 
+    const contactType = chatId.includes('@g.us') ? 'group' : 'individual';
+
     // Log de éxito simplificado
     console.log(`✅ Mensaje enviado: ${id_externo} ➡️ ${formattedNumber}`);
 
