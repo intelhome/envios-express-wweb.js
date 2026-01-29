@@ -137,18 +137,18 @@ exports.connectToWhatsApp = async (id_externo, receiveMessages, retryCount = 0) 
         ]);
 
         // Cambiar manualmente estado a ready
-        setTimeout(async () => {
-            if (client.pupPage && WhatsAppSessions[id_externo]?.status !== 'ready') {
-                const estaEnChats = await client.pupPage.evaluate(() => {
-                    return !!document.querySelector('#side') || !!document.querySelector('.two');
-                });
+        // setTimeout(async () => {
+        //     if (client.pupPage && WhatsAppSessions[id_externo]?.status !== 'ready') {
+        //         const estaEnChats = await client.pupPage.evaluate(() => {
+        //             return !!document.querySelector('#side') || !!document.querySelector('.two');
+        //         });
 
-                if (estaEnChats) {
-                    console.log("⚡Interfaz detectada manualmente. Disparando READY forzado.");
-                    client.emit('ready');
-                }
-            }
-        }, 20000);
+        //         if (estaEnChats) {
+        //             console.log("⚡Interfaz detectada manualmente. Disparando READY forzado.");
+        //             client.emit('ready');
+        //         }
+        //     }
+        // }, 20000);
 
         console.log(`✅ Cliente inicializado correctamente para ${id_externo}`);
         WhatsAppSessions[id_externo].status = 'initialized';
@@ -237,7 +237,16 @@ exports.connectToWhatsApp = async (id_externo, receiveMessages, retryCount = 0) 
  * Configurar eventos del cliente WhatsApp
  */
 async function setupClientEvents(client, id_externo, receiveMessages) {
-    client.removeAllListeners();
+
+    // client.removeAllListeners();
+    client.removeAllListeners('qr');
+    client.removeAllListeners('authenticated');
+    client.removeAllListeners('ready');
+    client.removeAllListeners('auth_failure');
+    client.removeAllListeners('disconnected');
+    client.removeAllListeners('message');
+    client.removeAllListeners('message_create');
+    client.removeAllListeners('message_ack');
 
     // Evento: QR generado
     client.once('qr', async (qr) => {
@@ -249,8 +258,8 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
         WhatsAppSessions[id_externo] = {
             ...WhatsAppSessions[id_externo], // Mantener datos existentes
             client,
-            status: 'qr_code', // ⭐ AÑADIR
-            qr: qrCodeData, // ⭐ AÑADIR
+            status: 'qr_code',
+            qr: qrCodeData,
             connectedAt: null,
             qrGeneratedAt: Date.now(),
             qrCode: qrCodeData,
@@ -272,7 +281,7 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
         // socketService.emitAuthStatus(id_externo);
 
         const user = await userService.getUserByIdExterno(id_externo);
-        
+
         socketService.emitConnected(id_externo, {
             id: user._id || user.id || id_externo,
             nombre: user.nombre || user.name || 'Usuario',

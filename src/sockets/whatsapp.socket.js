@@ -118,6 +118,27 @@ const initializeSocketEvents = (io) => {
 
 // Función auxiliar: Manejar sesión existente
 async function handleExistingSession(socket, id_externo, session) {
+
+    const client = session.client;
+    const state = await client.getState();
+
+    // ✅ PRIMERO: Verificar si está conectado
+    if (state === 'CONNECTED') {
+        // Ya está conectado
+        socket.emit('qrstatus', './assets/check.svg');
+        socket.emit('log', 'Usuario conectado');
+        socket.emit('ready', {
+            message: 'WhatsApp ya está conectado',
+            id_externo,
+            phoneNumber: client.info?.wid?.user
+        });
+        console.log(`✅ Usuario ${id_externo} ya conectado`);
+
+        // Enviar información del usuario
+        await sendUserInfo(socket, id_externo);
+        return;
+    }
+
     if (session.qrCode) {
         // Tiene QR pendiente
         socket.emit('qr', session.qrCode);
@@ -126,15 +147,18 @@ async function handleExistingSession(socket, id_externo, session) {
         return;
     }
 
-    if (session.connectedAt) {
-        // Ya está conectado
-        socket.emit('qrstatus', './assets/check.svg');
-        socket.emit('log', 'Usuario conectado');
-        console.log(`✅ Usuario ${id_externo} ya conectado`);
+    // const state = await client.getState();
+    // // if (session.connectedAt) {
+    // // if (session.status == 'authenticated' || session.status == 'ready') {
+    // if (state === 'CONNECTED') {
+    //     // Ya está conectado
+    //     socket.emit('qrstatus', './assets/check.svg');
+    //     socket.emit('log', 'Usuario conectado');
+    //     console.log(`✅ Usuario ${id_externo} ya conectado`);
 
-        // Enviar información del usuario
-        await sendUserInfo(socket, id_externo);
-    }
+    //     // Enviar información del usuario
+    //     await sendUserInfo(socket, id_externo);
+    // }
 }
 
 // Función auxiliar: Manejar nueva sesión
@@ -149,7 +173,7 @@ async function handleNewSession(socket, id_externo, whatsappService) {
         }
 
         // Verificar si debe restaurar sesión
-        if (user.estado === 'conectado' || user.estado === 'desconectado') {
+        if (user.estado === 'conectado' || user.estado === 'desconectado' || user.estado === 'autenticado') {
             socket.emit('qrstatus', './assets/loader.gif');
             socket.emit('log', 'Restaurando sesión...');
 
