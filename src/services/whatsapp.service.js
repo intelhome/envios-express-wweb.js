@@ -148,7 +148,7 @@ exports.connectToWhatsApp = async (id_externo, receiveMessages, retryCount = 0) 
                     client.emit('ready');
                 }
             }
-        }, 10000);
+        }, 20000);
 
         console.log(`✅ Cliente inicializado correctamente para ${id_externo}`);
         WhatsAppSessions[id_externo].status = 'initialized';
@@ -269,7 +269,17 @@ async function setupClientEvents(client, id_externo, receiveMessages) {
         }
 
         await userService.updateUser(id_externo, { estado: 'autenticado' });
-        socketService.emitAuthStatus(id_externo);
+        // socketService.emitAuthStatus(id_externo);
+
+        const user = await userService.getUserByIdExterno(id_externo);
+        
+        socketService.emitConnected(id_externo, {
+            id: user._id || user.id || id_externo,
+            nombre: user.nombre || user.name || 'Usuario',
+            id_externo: user.id_externo,
+            fecha: user.fechaCreacion || user.fecha,
+            receive_messages: user.receive_messages,
+        });
     });
 
     client.once('ready', async () => {
